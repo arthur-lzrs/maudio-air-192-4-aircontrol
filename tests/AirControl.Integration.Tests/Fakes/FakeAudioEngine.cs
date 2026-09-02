@@ -24,12 +24,14 @@ public class FakeAudioEngine : IAudioEngine
     {
         OutputDeviceId = outputDeviceId;
         IsStarted = true;
+        CaptureFormatDescription = "2ch, 32-bit IeeeFloat, 48000Hz (fake)";
     }
 
     public void Stop()
     {
         IsStarted = false;
         OutputDeviceId = null;
+        CaptureFormatDescription = null;
     }
 
     public void SetTrim(InputChannelId channel, double trimDb) => _trimDb[channel] = TrimCalculator.Clamp(trimDb);
@@ -47,6 +49,8 @@ public class FakeAudioEngine : IAudioEngine
     public bool IsMonitoringEnabled { get; private set; } = true;
 
     public void SetMonitoringEnabled(bool enabled) => IsMonitoringEnabled = enabled;
+
+    public string? CaptureFormatDescription { get; private set; }
 
     /// <summary>Simula um buffer capturado no canal, aplicando o trim atual e disparando LevelsChanged.</summary>
     public void PushSamples(InputChannelId channel, ReadOnlySpan<float> rawSamples)

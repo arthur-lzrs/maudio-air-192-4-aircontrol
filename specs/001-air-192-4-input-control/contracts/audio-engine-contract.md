@@ -49,6 +49,9 @@ public interface IAudioEngine
     // Habilita/desabilita a reprodução audível (playthrough) sem parar captura/meters.
     bool IsMonitoringEnabled { get; }
     void SetMonitoringEnabled(bool enabled);
+
+    // Diagnóstico do formato de captura negociado (canais, bits, encoding, sample rate).
+    string? CaptureFormatDescription { get; }
 }
 
 public enum InputChannelId { Input1, Input2 }

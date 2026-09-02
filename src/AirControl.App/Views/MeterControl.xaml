@@ -8,35 +8,60 @@
         <converters:ClippingToBrushConverter x:Key="ClippingToBrushConverter" />
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
     </UserControl.Resources>
-    <StackPanel Orientation="Vertical" Width="140"
+    <StackPanel Orientation="Vertical" Width="150"
                 AutomationProperties.Name="{Binding ChannelLabel, ElementName=Root}"
                 AutomationProperties.LiveSetting="Polite">
         <TextBlock Text="{Binding ChannelLabel, ElementName=Root}" HorizontalAlignment="Center" FontWeight="Bold" />
 
+        <!--
+            Escala convencional de meter de áudio digital (-60 a +6 dBFS), mais útil no dia a dia
+            que o range interno de silêncio (-96 dB) usado só para o cálculo de peak/RMS. As
+            RowDefinitions em "*" são proporcionais aos segmentos de dB (+6..0, 0..-20, -20..-40,
+            -40..-60), então os rótulos ficam alinhados com a posição real na barra.
+        -->
+        <Grid Height="180" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Width="28" Margin="0,0,4,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="6*" />
+                    <RowDefinition Height="20*" />
+                    <RowDefinition Height="20*" />
+                    <RowDefinition Height="20*" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="+6" FontSize="8" VerticalAlignment="Top" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="0" Text="0" FontSize="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="1" Text="-20" FontSize="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="2" Text="-40" FontSize="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="3" Text="-60" FontSize="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" />
+            </Grid>
+
+            <ProgressBar Grid.Column="1" Orientation="Vertical" Width="22"
+                         Minimum="-60" Maximum="6"
+                         Value="{Binding PeakDb, ElementName=Root, Mode=OneWay}"
+                         Foreground="{Binding IsClipping, ElementName=Root, Converter={StaticResource ClippingToBrushConverter}}"
+                         AutomationProperties.Name="Nível de pico" />
+
+            <ProgressBar Grid.Column="2" Orientation="Vertical" Width="12" Margin="4,0,0,0"
+                         Minimum="-60" Maximum="6"
+                         Value="{Binding RmsDb, ElementName=Root, Mode=OneWay}"
+                         AutomationProperties.Name="Nível RMS" />
+        </Grid>
+
         <Grid Margin="0,4,0,0">
-            <TextBlock Text="Peak" FontSize="10" />
+            <TextBlock Text="Peak" FontSize="9" HorizontalAlignment="Left" />
             <TextBlock Text="{Binding PeakDb, ElementName=Root, StringFormat={}{0:0} dB}"
-                       FontSize="10" HorizontalAlignment="Right" />
+                       FontSize="9" HorizontalAlignment="Right" />
         </Grid>
-        <ProgressBar Height="16" Minimum="-96" Maximum="12"
-                     Value="{Binding PeakDb, ElementName=Root, Mode=OneWay}"
-                     Foreground="{Binding IsClipping, ElementName=Root, Converter={StaticResource ClippingToBrushConverter}}"
-                     AutomationProperties.Name="Nível de pico" />
-
         <Grid>
-            <TextBlock Text="-96" FontSize="8" HorizontalAlignment="Left" />
-            <TextBlock Text="-48" FontSize="8" HorizontalAlignment="Center" />
-            <TextBlock Text="0" FontSize="8" HorizontalAlignment="Right" Margin="0,0,18,0" />
-        </Grid>
-
-        <Grid Margin="0,4,0,0">
-            <TextBlock Text="RMS" FontSize="10" />
+            <TextBlock Text="RMS" FontSize="9" HorizontalAlignment="Left" />
             <TextBlock Text="{Binding RmsDb, ElementName=Root, StringFormat={}{0:0} dB}"
-                       FontSize="10" HorizontalAlignment="Right" />
+                       FontSize="9" HorizontalAlignment="Right" />
         </Grid>
-        <ProgressBar Height="10" Minimum="-96" Maximum="12"
-                     Value="{Binding RmsDb, ElementName=Root, Mode=OneWay}"
-                     AutomationProperties.Name="Nível RMS" />
 
         <TextBlock Text="CLIPPING" Foreground="Red" FontWeight="Bold" HorizontalAlignment="Center"
                    Margin="0,4,0,0"

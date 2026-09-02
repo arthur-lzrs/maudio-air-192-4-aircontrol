@@ -1,9 +1,13 @@
 using AirControl.Core;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AirControl.App.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
+    private readonly IAudioEngine _audioEngine;
+    private readonly ISettingsRepository _settingsRepository;
+
     public DeviceStatusViewModel DeviceStatus { get; }
     public ChannelMeterViewModel Input1Meter { get; }
     public ChannelMeterViewModel Input2Meter { get; }
@@ -15,8 +19,14 @@ public partial class MainWindowViewModel : ViewModelBase
     public SoloButtonViewModel Input2Solo { get; }
     public MonitoringViewModel Monitoring { get; }
 
+    [ObservableProperty]
+    private string? _captureFormatDescription;
+
     public MainWindowViewModel(IAudioEngine audioEngine, IAudioDeviceProvider deviceProvider, ISettingsRepository settingsRepository)
     {
+        _audioEngine = audioEngine;
+        _settingsRepository = settingsRepository;
+
         DeviceStatus = new DeviceStatusViewModel(deviceProvider);
         Monitoring = new MonitoringViewModel(audioEngine);
         Input1Meter = new ChannelMeterViewModel(InputChannelId.Input1, audioEngine, deviceProvider);
@@ -28,29 +38,28 @@ public partial class MainWindowViewModel : ViewModelBase
         Input1Solo = new SoloButtonViewModel(InputChannelId.Input1, audioEngine, settingsRepository);
         Input2Solo = new SoloButtonViewModel(InputChannelId.Input2, audioEngine, settingsRepository);
 
-        deviceProvider.ConnectionChanged += (_, args) => OnConnectionChanged(args, audioEngine, settingsRepository);
+        deviceProvider.ConnectionChanged += (_, args) => OnConnectionChanged(args);
 
         if (deviceProvider.IsAirDeviceConnected)
         {
-            OnConnectionChanged(new DeviceConnectionChangedEventArgs(true, null), audioEngine, settingsRepository);
+            OnConnectionChanged(new DeviceConnectionChangedEventArgs(true, null));
         }
     }
 
-    private static void OnConnectionChanged(
-        DeviceConnectionChangedEventArgs args,
-        IAudioEngine audioEngine,
-        ISettingsRepository settingsRepository)
+    private void OnConnectionChanged(DeviceConnectionChangedEventArgs args)
     {
         if (!args.IsConnected)
         {
-            audioEngine.Stop();
+            _audioEngine.Stop();
+            CaptureFormatDescription = null;
             return;
         }
 
-        var profile = settingsRepository.Load();
+        var profile = _settingsRepository.Load();
         if (profile.OutputDeviceId is not null)
         {
-            audioEngine.Start(profile.OutputDeviceId);
+            _audioEngine.Start(profile.OutputDeviceId);
+            CaptureFormatDescription = _audioEngine.CaptureFormatDescription;
         }
     }
 }

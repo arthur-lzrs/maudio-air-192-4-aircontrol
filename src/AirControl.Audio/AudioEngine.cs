@@ -16,6 +16,7 @@ public class AudioEngine : IAudioEngine, IDisposable
     private WasapiOut? _output;
     private BufferedWaveProvider? _outputBuffer;
     private bool _monitoringEnabled = true;
+    private string? _captureFormatDescription;
 
     public event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
 
@@ -43,6 +44,13 @@ public class AudioEngine : IAudioEngine, IDisposable
         _output.Init(_outputBuffer);
         _output.Play();
         _capture.StartRecording();
+
+        var format = _capture.WaveFormat;
+        var channelWarning = format.Channels != 2
+            ? " ⚠ esperado 2 canais (Input1/Input2 seriam duplicados ou mal mapeados)"
+            : string.Empty;
+        _captureFormatDescription =
+            $"{format.Channels}ch, {format.BitsPerSample}-bit {format.Encoding}, {format.SampleRate}Hz{channelWarning}";
     }
 
     public void Stop()
@@ -56,6 +64,7 @@ public class AudioEngine : IAudioEngine, IDisposable
         _output = null;
 
         _outputBuffer = null;
+        _captureFormatDescription = null;
     }
 
     public void SetTrim(InputChannelId channel, double trimDb) => _trimDb[channel] = TrimCalculator.Clamp(trimDb);
@@ -73,6 +82,8 @@ public class AudioEngine : IAudioEngine, IDisposable
     public bool IsMonitoringEnabled => _monitoringEnabled;
 
     public void SetMonitoringEnabled(bool enabled) => _monitoringEnabled = enabled;
+
+    public string? CaptureFormatDescription => _captureFormatDescription;
 
     /// <summary>
     /// Lê o formato de amostra real do dispositivo (bits/encoding), em vez de assumir float de
