@@ -56,10 +56,21 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         var profile = _settingsRepository.Load();
-        if (profile.OutputDeviceId is not null)
+        if (profile.OutputDeviceId is null)
+        {
+            return;
+        }
+
+        try
         {
             _audioEngine.Start(profile.OutputDeviceId);
             CaptureFormatDescription = _audioEngine.CaptureFormatDescription;
+        }
+        catch (Exception ex)
+        {
+            // Uma falha ao iniciar a captura/reprodução (dispositivo desconectado, formato não
+            // suportado, etc.) não deve derrubar o app inteiro — só a monitoração fica indisponível.
+            CaptureFormatDescription = $"Falha ao iniciar monitoração: {ex.Message}";
         }
     }
 }

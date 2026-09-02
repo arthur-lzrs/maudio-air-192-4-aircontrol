@@ -16,6 +16,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        DispatcherUnhandledException += (_, args) =>
+        {
+            MessageBox.Show(
+                $"Ocorreu um erro inesperado:\n\n{args.Exception.Message}",
+                "AIR Control",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            args.Handled = true;
+        };
+
         _singleInstanceGuard = new SingleInstanceGuard();
         if (!_singleInstanceGuard.TryAcquire())
         {

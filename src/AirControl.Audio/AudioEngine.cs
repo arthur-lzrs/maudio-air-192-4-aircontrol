@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using AirControl.Core;
 using NAudio.CoreAudioApi;
+using NAudio.MediaFoundation;
 using NAudio.Wave;
 
 namespace AirControl.Audio;
@@ -12,9 +14,12 @@ public class AudioEngine : IAudioEngine, IDisposable
     private readonly Dictionary<InputChannelId, double> _trimDb = Channels.ToDictionary(c => c, _ => 0.0);
     private readonly ChannelToggleTracker _toggles = new(Channels);
 
+    private static bool _mediaFoundationStarted;
+
     private WasapiCapture? _capture;
     private WasapiOut? _output;
     private BufferedWaveProvider? _outputBuffer;
+    private MediaFoundationResampler? _resampler;
     private bool _monitoringEnabled = true;
     private string? _captureFormatDescription;
 
@@ -24,33 +29,147 @@ public class AudioEngine : IAudioEngine, IDisposable
     {
         Stop();
 
-        using var enumerator = new MMDeviceEnumerator();
-        var inputDevice = enumerator
-            .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .FirstOrDefault(d => d.FriendlyName.Contains(AirDeviceNameFragment, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("AIR 192|4 não encontrado entre os dispositivos de captura ativos.");
-
-        var outputDevice = enumerator.GetDevice(outputDeviceId);
-
-        _capture = new WasapiCapture(inputDevice);
-        _capture.DataAvailable += OnDataAvailable;
-
-        _outputBuffer = new BufferedWaveProvider(_capture.WaveFormat)
+        try
         {
-            DiscardOnBufferOverflow = true,
-        };
+            using var enumerator = new MMDeviceEnumerator();
+            var inputDevice = enumerator
+                .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                .FirstOrDefault(d => d.FriendlyName.Contains(AirDeviceNameFragment, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException("AIR 192|4 não encontrado entre os dispositivos de captura ativos.");
 
-        _output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
-        _output.Init(_outputBuffer);
-        _output.Play();
-        _capture.StartRecording();
+            var outputDevice = ResolveOutputDevice(enumerator, outputDeviceId);
 
-        var format = _capture.WaveFormat;
-        var channelWarning = format.Channels != 2
-            ? " ⚠ esperado 2 canais (Input1/Input2 seriam duplicados ou mal mapeados)"
-            : string.Empty;
-        _captureFormatDescription =
-            $"{format.Channels}ch, {format.BitsPerSample}-bit {format.Encoding}, {format.SampleRate}Hz{channelWarning}";
+            _capture = CreateAndStartCapture(inputDevice);
+
+            _outputBuffer = new BufferedWaveProvider(_capture.WaveFormat)
+            {
+                DiscardOnBufferOverflow = true,
+            };
+
+            _output = CreateAndInitOutput(outputDevice, _outputBuffer);
+            _output.Play();
+
+            var format = _capture.WaveFormat;
+            var channelWarning = format.Channels != 2
+                ? " ⚠ esperado 2 canais (Input1/Input2 seriam duplicados ou mal mapeados)"
+                : string.Empty;
+            _captureFormatDescription =
+                $"{format.Channels}ch, {format.BitsPerSample}-bit {format.Encoding}, {format.SampleRate}Hz{channelWarning}";
+        }
+        catch
+        {
+            // Não deixa a engine em estado parcial (ex.: captura iniciada mas saída não) se
+            // qualquer etapa falhar no meio do caminho.
+            Stop();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// O dispositivo de saída salvo pode ter sido removido/desconectado (ex.: fone Bluetooth)
+    /// desde a última sessão, causando AUDCLNT_E_DEVICE_INVALIDATED. Nesse caso, cai para o
+    /// dispositivo de saída padrão atual em vez de propagar o erro.
+    /// </summary>
+    private static MMDevice ResolveOutputDevice(MMDeviceEnumerator enumerator, string outputDeviceId)
+    {
+        try
+        {
+            var device = enumerator.GetDevice(outputDeviceId);
+            if (device.State == DeviceState.Active)
+            {
+                return device;
+            }
+        }
+        catch (COMException)
+        {
+            // Dispositivo salvo não existe mais; cai para o padrão abaixo.
+        }
+
+        return enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+    }
+
+    /// <summary>
+    /// Algumas interfaces reportam o "mix format" compartilhado como uma struct
+    /// WAVEFORMATEXTENSIBLE que o próprio driver rejeita ao inicializar o AudioClient
+    /// (AUDCLNT_E_UNSUPPORTED_FORMAT), mesmo aceitando o formato IEEE float "plano" equivalente
+    /// (mesmos canais/sample rate). Se a tentativa padrão falhar com esse erro, tenta de novo
+    /// forçando um WaveFormat IEEE float simples com os mesmos canais/sample rate.
+    /// </summary>
+    private WasapiCapture CreateAndStartCapture(MMDevice inputDevice)
+    {
+        var capture = new WasapiCapture(inputDevice);
+        capture.DataAvailable += OnDataAvailable;
+        try
+        {
+            capture.StartRecording();
+            return capture;
+        }
+        catch (COMException ex) when (IsUnsupportedFormat(ex))
+        {
+            var fallbackFormat = WaveFormat.CreateIeeeFloatWaveFormat(capture.WaveFormat.SampleRate, capture.WaveFormat.Channels);
+            capture.DataAvailable -= OnDataAvailable;
+            capture.Dispose();
+
+            capture = new WasapiCapture(inputDevice) { WaveFormat = fallbackFormat };
+            capture.DataAvailable += OnDataAvailable;
+            capture.StartRecording();
+            return capture;
+        }
+    }
+
+    /// <summary>
+    /// O formato negociado para a captura pode não ser aceito diretamente pelo dispositivo de
+    /// saída escolhido (taxas/canais/bits diferentes, ou a mesma variação de struct
+    /// WAVEFORMATEXTENSIBLE-vs-plana descrita em <see cref="CreateAndStartCapture"/>). Tenta
+    /// inicializar direto; se falhar, reamostra para o mix format do próprio dispositivo de
+    /// saída; se isso também falhar, reamostra para um WaveFormat IEEE float "plano" com os
+    /// mesmos canais/sample rate do dispositivo de saída.
+    /// </summary>
+    private WasapiOut CreateAndInitOutput(MMDevice outputDevice, BufferedWaveProvider source)
+    {
+        var output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
+        try
+        {
+            output.Init(source);
+            return output;
+        }
+        catch (COMException ex) when (IsUnsupportedFormat(ex))
+        {
+            output.Dispose();
+        }
+
+        EnsureMediaFoundationStarted();
+        var outputMixFormat = outputDevice.AudioClient.MixFormat;
+
+        output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
+        try
+        {
+            _resampler = new MediaFoundationResampler(source, outputMixFormat) { ResamplerQuality = 60 };
+            output.Init(_resampler);
+            return output;
+        }
+        catch (COMException ex) when (IsUnsupportedFormat(ex))
+        {
+            output.Dispose();
+            _resampler?.Dispose();
+        }
+
+        var plainFormat = WaveFormat.CreateIeeeFloatWaveFormat(outputMixFormat.SampleRate, outputMixFormat.Channels);
+        output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
+        _resampler = new MediaFoundationResampler(source, plainFormat) { ResamplerQuality = 60 };
+        output.Init(_resampler);
+        return output;
+    }
+
+    private static bool IsUnsupportedFormat(COMException ex) => unchecked((uint)ex.HResult) == 0x88890008;
+
+    private static void EnsureMediaFoundationStarted()
+    {
+        if (!_mediaFoundationStarted)
+        {
+            MediaFoundationApi.Startup();
+            _mediaFoundationStarted = true;
+        }
     }
 
     public void Stop()
@@ -62,6 +181,9 @@ public class AudioEngine : IAudioEngine, IDisposable
         _output?.Stop();
         _output?.Dispose();
         _output = null;
+
+        _resampler?.Dispose();
+        _resampler = null;
 
         _outputBuffer = null;
         _captureFormatDescription = null;
