@@ -296,7 +296,7 @@ e confirmar que ambos retornam ao estado de mute/trim anterior
       todos os controles (meters, trim, mute, solo), contraste adequado nos estados visuais
       (incluindo clipping/mute/solo) e anúncios corretos por leitor de tela (FR-020, Constitution:
       User Experience Consistency)
-- [ ] T047 Executar a validação manual completa de quickstart.md (os 14 cenários) com o hardware
+- [X] T047 Executar a validação manual completa de quickstart.md (os 14 cenários) com o hardware
       AIR 192|4 real antes de considerar a feature 001 pronta para revisão
 
 ---
@@ -394,3 +394,15 @@ Com múltiplos desenvolvedores:
 - Parar em qualquer checkpoint para validar a story isoladamente
 - Evitar: tasks vagas, conflitos no mesmo arquivo, dependências entre stories que quebrem a
   independência
+
+---
+
+## Phase 8: Convergence
+
+- [X] T048 Complementar `tests/AirControl.Integration.Tests/PerformanceBudgetTests.cs` com
+      `RealHardwarePerformanceBudgetTests.cs`, medindo a latência `SetTrim`/`SetMute`/`SetSolo` →
+      `LevelsChanged` e a detecção de conexão contra a implementação real `AudioEngine`/
+      `AudioDeviceProvider` (WASAPI) quando o AIR 192|4 está fisicamente conectado, para validar
+      empiricamente SC-002 e SC-005 no caminho de produção; a detecção de desconexão física
+      (<3s) permanece validada manualmente via quickstart.md (T047), pois não é automatizável
+      sem manipular o hardware
