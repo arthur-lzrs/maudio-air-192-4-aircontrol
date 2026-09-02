@@ -13,10 +13,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public MuteButtonViewModel Input2Mute { get; }
     public SoloButtonViewModel Input1Solo { get; }
     public SoloButtonViewModel Input2Solo { get; }
+    public MonitoringViewModel Monitoring { get; }
 
     public MainWindowViewModel(IAudioEngine audioEngine, IAudioDeviceProvider deviceProvider, ISettingsRepository settingsRepository)
     {
         DeviceStatus = new DeviceStatusViewModel(deviceProvider);
+        Monitoring = new MonitoringViewModel(audioEngine);
         Input1Meter = new ChannelMeterViewModel(InputChannelId.Input1, audioEngine, deviceProvider);
         Input2Meter = new ChannelMeterViewModel(InputChannelId.Input2, audioEngine, deviceProvider);
         Input1Trim = new TrimControlViewModel(InputChannelId.Input1, audioEngine, settingsRepository);

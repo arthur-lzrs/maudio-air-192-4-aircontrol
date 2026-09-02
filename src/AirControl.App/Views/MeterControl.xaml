@@ -13,13 +13,27 @@
                 AutomationProperties.LiveSetting="Polite">
         <TextBlock Text="{Binding ChannelLabel, ElementName=Root}" HorizontalAlignment="Center" FontWeight="Bold" />
 
-        <TextBlock Text="Peak" FontSize="10" Margin="0,4,0,0" />
+        <Grid Margin="0,4,0,0">
+            <TextBlock Text="Peak" FontSize="10" />
+            <TextBlock Text="{Binding PeakDb, ElementName=Root, StringFormat={}{0:0} dB}"
+                       FontSize="10" HorizontalAlignment="Right" />
+        </Grid>
         <ProgressBar Height="16" Minimum="-96" Maximum="12"
                      Value="{Binding PeakDb, ElementName=Root, Mode=OneWay}"
                      Foreground="{Binding IsClipping, ElementName=Root, Converter={StaticResource ClippingToBrushConverter}}"
                      AutomationProperties.Name="Nível de pico" />
 
-        <TextBlock Text="RMS" FontSize="10" Margin="0,4,0,0" />
+        <Grid>
+            <TextBlock Text="-96" FontSize="8" HorizontalAlignment="Left" />
+            <TextBlock Text="-48" FontSize="8" HorizontalAlignment="Center" />
+            <TextBlock Text="0" FontSize="8" HorizontalAlignment="Right" Margin="0,0,18,0" />
+        </Grid>
+
+        <Grid Margin="0,4,0,0">
+            <TextBlock Text="RMS" FontSize="10" />
+            <TextBlock Text="{Binding RmsDb, ElementName=Root, StringFormat={}{0:0} dB}"
+                       FontSize="10" HorizontalAlignment="Right" />
+        </Grid>
         <ProgressBar Height="10" Minimum="-96" Maximum="12"
                      Value="{Binding RmsDb, ElementName=Root, Mode=OneWay}"
                      AutomationProperties.Name="Nível RMS" />

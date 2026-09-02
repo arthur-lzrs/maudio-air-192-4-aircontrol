@@ -12,4 +12,13 @@ public interface IAudioEngine
     void SetSolo(InputChannelId channel, bool isSoloed);
 
     ChannelState GetState(InputChannelId channel);
+
+    /// <summary>
+    /// Habilita/desabilita a reprodução audível (playthrough) no dispositivo de saída, sem parar
+    /// a captura nem os meters. Quando desabilitada, a saída fica em silêncio independentemente
+    /// de mute/solo por canal.
+    /// </summary>
+    bool IsMonitoringEnabled { get; }
+
+    void SetMonitoringEnabled(bool enabled);
 }

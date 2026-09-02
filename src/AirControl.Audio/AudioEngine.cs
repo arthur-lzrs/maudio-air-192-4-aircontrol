@@ -15,6 +15,7 @@ public class AudioEngine : IAudioEngine, IDisposable
     private WasapiCapture? _capture;
     private WasapiOut? _output;
     private BufferedWaveProvider? _outputBuffer;
+    private bool _monitoringEnabled = true;
 
     public event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
 
@@ -69,9 +70,16 @@ public class AudioEngine : IAudioEngine, IDisposable
         _toggles.IsSoloed(channel),
         _toggles.IsEffectivelyAudible(channel));
 
+    public bool IsMonitoringEnabled => _monitoringEnabled;
+
+    public void SetMonitoringEnabled(bool enabled) => _monitoringEnabled = enabled;
+
     /// <summary>
-    /// Assume formato IEEE float (mix format padrão do WASAPI compartilhado no Windows) para os
-    /// 2 canais do AIR 192|4. Aplica trim, resolve mute/solo e calcula peak/RMS por canal.
+    /// Lê o formato de amostra real do dispositivo (bits/encoding), em vez de assumir float de
+    /// 32 bits: o mix format compartilhado do WASAPI para o AIR 192|4 é tipicamente PCM de 16 ou
+    /// 24 bits, não IEEE float, e assumir 4 bytes/amostra desalinha a leitura entre os 2 canais,
+    /// fazendo o Input 2 "ler" bytes do Input 1 como ruído. Aplica trim, resolve mute/solo e
+    /// calcula peak/RMS por canal.
     /// </summary>
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
@@ -81,7 +89,7 @@ public class AudioEngine : IAudioEngine, IDisposable
         }
 
         var format = _capture.WaveFormat;
-        const int bytesPerSample = 4;
+        var bytesPerSample = format.BitsPerSample / 8;
         var channelCount = format.Channels;
         var sampleCount = e.BytesRecorded / bytesPerSample / channelCount;
 
@@ -98,19 +106,21 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             var frameOffset = i * channelCount * bytesPerSample;
 
-            var leftRaw = BitConverter.ToSingle(e.Buffer, frameOffset);
-            var rightRaw = channelCount > 1 ? BitConverter.ToSingle(e.Buffer, frameOffset + bytesPerSample) : leftRaw;
+            var leftRaw = SampleFormatIO.ReadSample(e.Buffer, frameOffset, format);
+            var rightRaw = channelCount > 1
+                ? SampleFormatIO.ReadSample(e.Buffer, frameOffset + bytesPerSample, format)
+                : leftRaw;
 
             input1[i] = leftRaw * leftGain;
             input2[i] = rightRaw * rightGain;
 
-            var leftOut = leftAudible ? input1[i] : 0f;
-            var rightOut = rightAudible ? input2[i] : 0f;
+            var leftOut = leftAudible && _monitoringEnabled ? input1[i] : 0f;
+            var rightOut = rightAudible && _monitoringEnabled ? input2[i] : 0f;
 
-            BitConverter.GetBytes(leftOut).CopyTo(processed, frameOffset);
+            SampleFormatIO.WriteSample(processed, frameOffset, leftOut, format);
             if (channelCount > 1)
             {
-                BitConverter.GetBytes(rightOut).CopyTo(processed, frameOffset + bytesPerSample);
+                SampleFormatIO.WriteSample(processed, frameOffset + bytesPerSample, rightOut, format);
             }
         }
 

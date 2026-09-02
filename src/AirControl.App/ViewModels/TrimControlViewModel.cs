@@ -1,10 +1,13 @@
 using AirControl.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AirControl.App.ViewModels;
 
 public partial class TrimControlViewModel : ViewModelBase
 {
+    private const double DefaultTrimDb = 0.0;
+
     private readonly InputChannelId _channel;
     private readonly IAudioEngine _audioEngine;
     private readonly ISettingsRepository _settingsRepository;
@@ -29,6 +32,13 @@ public partial class TrimControlViewModel : ViewModelBase
     }
 
     partial void OnTrimDbChanged(double value) => _audioEngine.SetTrim(_channel, value);
+
+    [RelayCommand]
+    private void Reset()
+    {
+        TrimDb = DefaultTrimDb;
+        CommitTrim();
+    }
 
     /// <summary>Persiste o trim atual. Deve ser chamado ao soltar o slider, não a cada mudança contínua.</summary>
     public void CommitTrim()

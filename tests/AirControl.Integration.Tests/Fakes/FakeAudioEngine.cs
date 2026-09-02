@@ -44,6 +44,10 @@ public class FakeAudioEngine : IAudioEngine
         _toggles.IsSoloed(channel),
         _toggles.IsEffectivelyAudible(channel));
 
+    public bool IsMonitoringEnabled { get; private set; } = true;
+
+    public void SetMonitoringEnabled(bool enabled) => IsMonitoringEnabled = enabled;
+
     /// <summary>Simula um buffer capturado no canal, aplicando o trim atual e disparando LevelsChanged.</summary>
     public void PushSamples(InputChannelId channel, ReadOnlySpan<float> rawSamples)
     {
