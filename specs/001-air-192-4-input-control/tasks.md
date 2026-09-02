@@ -40,14 +40,14 @@ tests/AirControl.Integration.Tests/
 
 **Purpose**: Inicialização do projeto e estrutura básica de solução
 
-- [ ] T001 Criar a estrutura de diretórios e arquivos `.csproj` para `src/AirControl.Core/`,
+- [X] T001 Criar a estrutura de diretórios e arquivos `.csproj` para `src/AirControl.Core/`,
       `src/AirControl.Audio/`, `src/AirControl.App/`, `tests/AirControl.Core.Tests/` e
       `tests/AirControl.Integration.Tests/` conforme plan.md § Project Structure
-- [ ] T002 Criar `AirControl.sln` na raiz do repositório referenciando os 5 projetos e configurar
+- [X] T002 Criar `AirControl.sln` na raiz do repositório referenciando os 5 projetos e configurar
       as referências entre projetos (`AirControl.App` → `AirControl.Audio` → `AirControl.Core`;
       `AirControl.Core` sem dependência de WPF/NAudio); adicionar pacotes NuGet `NAudio` em
       `AirControl.Audio` e `xunit`/`xunit.runner.visualstudio` nos dois projetos de teste
-- [ ] T003 [P] Configurar `.editorconfig`, `<Nullable>enable</Nullable>` e
+- [X] T003 [P] Configurar `.editorconfig`, `<Nullable>enable</Nullable>` e
       `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` em todos os `.csproj` (Constitution:
       Code Quality — zero warnings não justificados)
 
@@ -61,40 +61,40 @@ seleção de saída de áudio)
 
 **⚠️ CRITICAL**: Nenhuma user story pode começar antes desta fase estar completa
 
-- [ ] T004 Criar os records/enums de domínio em `src/AirControl.Core/`: `InputChannelId`,
+- [X] T004 Criar os records/enums de domínio em `src/AirControl.Core/`: `InputChannelId`,
       `ChannelState`, `ChannelLevelsChangedEventArgs`, `DeviceConnectionChangedEventArgs`,
       `AudioOutputDeviceInfo`, `ChannelSettings`, `ChannelSettingsProfile` (ver data-model.md e
       contracts/audio-engine-contract.md)
-- [ ] T005 [P] Criar as interfaces `IAudioEngine`, `IAudioDeviceProvider`, `ISettingsRepository`,
+- [X] T005 [P] Criar as interfaces `IAudioEngine`, `IAudioDeviceProvider`, `ISettingsRepository`,
       `ISingleInstanceGuard` em `src/AirControl.Core/` exatamente como definidas em
       contracts/audio-engine-contract.md
-- [ ] T006 [P] Implementar `SettingsRepository` (JSON via `System.Text.Json`) em
+- [X] T006 [P] Implementar `SettingsRepository` (JSON via `System.Text.Json`) em
       `src/AirControl.Core/SettingsRepository.cs`, lendo/escrevendo
       `%AppData%\AirControl\channel-settings.json`; retorna `ChannelSettingsProfile` com defaults
       (`TrimDb=0`, `IsMuted=false`, `IsSoloed=false`, `OutputDeviceId=null`) se o arquivo estiver
       ausente ou corrompido (FR-014)
-- [ ] T007 [P] Testes unitários de `SettingsRepository` em
+- [X] T007 [P] Testes unitários de `SettingsRepository` em
       `tests/AirControl.Core.Tests/SettingsRepositoryTests.cs`: defaults quando arquivo ausente,
       defaults quando arquivo corrompido, round-trip `Save`→`Load` retorna profile idêntico
       (SC-004)
-- [ ] T008 Implementar `AudioDeviceProvider` em `src/AirControl.Audio/AudioDeviceProvider.cs`
+- [X] T008 Implementar `AudioDeviceProvider` em `src/AirControl.Audio/AudioDeviceProvider.cs`
       usando `MMDeviceEnumerator`/`IMMNotificationClient` para detectar conexão/desconexão do AIR
       192|4 (evento `ConnectionChanged` em até 3s, FR-001/FR-015/FR-016/SC-005) e para enumerar
       dispositivos de saída via `GetAvailableOutputDevices()` (FR-019)
-- [ ] T009 Implementar `SingleInstanceGuard` em `src/AirControl.Audio/SingleInstanceGuard.cs` com
+- [X] T009 Implementar `SingleInstanceGuard` em `src/AirControl.Audio/SingleInstanceGuard.cs` com
       `Mutex` nomeado; se já existir instância, focar a janela existente via
       `RegisterWindowMessage`/`PostMessage` e retornar `false` em `TryAcquire()` (FR-017)
-- [ ] T010 [P] Criar `FakeAudioEngine` e `FakeAudioDeviceProvider` em
+- [X] T010 [P] Criar `FakeAudioEngine` e `FakeAudioDeviceProvider` em
       `tests/AirControl.Integration.Tests/Fakes/` simulando buffers de áudio e eventos de
       conexão/desconexão, para permitir todos os testes de integração das próximas fases sem
       hardware físico (research.md §6)
-- [ ] T011 Criar `App.xaml`/`App.xaml.cs` em `src/AirControl.App/` com o composition root
+- [X] T011 Criar `App.xaml`/`App.xaml.cs` em `src/AirControl.App/` com o composition root
       (instanciando `AudioDeviceProvider`, `SettingsRepository`, `SingleInstanceGuard`) e o fluxo
       de startup: se `SingleInstanceGuard.TryAcquire()` retornar `false`, encerrar o processo sem
       inicializar `IAudioEngine` (FR-017)
-- [ ] T012 [P] Criar infraestrutura base de ViewModel (`ObservableObject`/`RelayCommand` ou
+- [X] T012 [P] Criar infraestrutura base de ViewModel (`ObservableObject`/`RelayCommand` ou
       `CommunityToolkit.Mvvm`) em `src/AirControl.App/ViewModels/ViewModelBase.cs`
-- [ ] T013 Implementar `OutputDeviceSelectorViewModel` e diálogo/seção de seleção em
+- [X] T013 Implementar `OutputDeviceSelectorViewModel` e diálogo/seção de seleção em
       `src/AirControl.App/ViewModels/OutputDeviceSelectorViewModel.cs` e
       `src/AirControl.App/Views/OutputDeviceSelectorView.xaml`: ao iniciar, se
       `ChannelSettingsProfile.OutputDeviceId` for nulo, solicitar ao usuário que escolha um
@@ -117,36 +117,36 @@ confirmar que cada meter se move independentemente e reflete presença/nível/cl
 
 > **NOTE: Escrever estes testes PRIMEIRO, garantir que FALHAM antes da implementação**
 
-- [ ] T014 [P] [US1] Testes unitários de cálculo de peak/RMS e do limiar de clipping (0 dBFS) em
+- [X] T014 [P] [US1] Testes unitários de cálculo de peak/RMS e do limiar de clipping (0 dBFS) em
       `tests/AirControl.Core.Tests/LevelMeteringTests.cs`
-- [ ] T015 [P] [US1] Teste de integração: `LevelsChanged` reflete níveis independentes por canal
+- [X] T015 [P] [US1] Teste de integração: `LevelsChanged` reflete níveis independentes por canal
       (sinal só no Input 1 não afeta Input 2) usando `FakeAudioEngine` em
       `tests/AirControl.Integration.Tests/MeteringIntegrationTests.cs`
-- [ ] T016 [P] [US1] Teste de integração: `ConnectionChanged` de `FakeAudioDeviceProvider`
+- [X] T016 [P] [US1] Teste de integração: `ConnectionChanged` de `FakeAudioDeviceProvider`
       dispara estado "não conectado"/"conectado" e o app não exibe atividade falsa quando
       desconectado, em `tests/AirControl.Integration.Tests/DeviceConnectionIntegrationTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Implementar captura em `AudioEngine` (`src/AirControl.Audio/AudioEngine.cs`):
+- [X] T017 [US1] Implementar captura em `AudioEngine` (`src/AirControl.Audio/AudioEngine.cs`):
       `Start(outputDeviceId)`/`Stop()` capturando o stream estéreo dos 2 inputs via WASAPI
       (NAudio), calculando peak/RMS por buffer e disparando `LevelsChanged` (FR-003, FR-004,
       FR-005a)
-- [ ] T018 [US1] Criar `DeviceStatusViewModel` em
+- [X] T018 [US1] Criar `DeviceStatusViewModel` em
       `src/AirControl.App/ViewModels/DeviceStatusViewModel.cs` vinculado a
       `IAudioDeviceProvider.ConnectionChanged`, expondo texto "Conectado"/"Não conectado" com
       `AutomationProperties` (FR-002)
-- [ ] T019 [US1] Criar `ChannelMeterViewModel` (uma instância por `InputChannelId`) em
+- [X] T019 [US1] Criar `ChannelMeterViewModel` (uma instância por `InputChannelId`) em
       `src/AirControl.App/ViewModels/ChannelMeterViewModel.cs` expondo `PeakDb`, `RmsDb`,
       `IsClipping` e estado de repouso quando o dispositivo está desconectado (FR-003, FR-004,
       FR-005, FR-015)
-- [ ] T020 [US1] Criar `MeterControl` (custom control ou composição de `ProgressBar`) em
+- [X] T020 [US1] Criar `MeterControl` (custom control ou composição de `ProgressBar`) em
       `src/AirControl.App/Views/MeterControl.xaml` exibindo peak e RMS no mesmo meter, com
       indicação visual de clipping distinta e `AutomationProperties.Name`/`LiveSetting=Polite`
       para leitores de tela (FR-005a, FR-020)
-- [ ] T021 [US1] Montar `MainWindow` em `src/AirControl.App/Views/MainWindow.xaml` com o status de
+- [X] T021 [US1] Montar `MainWindow` em `src/AirControl.App/Views/MainWindow.xaml` com o status de
       conexão e dois `MeterControl` (Input 1 e Input 2) ligados aos respectivos ViewModels
-- [ ] T022 [US1] Conectar o ciclo de vida do `AudioEngine` aos eventos de conexão em
+- [X] T022 [US1] Conectar o ciclo de vida do `AudioEngine` aos eventos de conexão em
       `src/AirControl.App/App.xaml.cs`/`MainWindowViewModel`: chamar `Start(outputDeviceId)`
       quando o dispositivo conecta (usando o `OutputDeviceId` salvo/selecionado), `Stop()` e
       reset dos meters para o estado de repouso quando desconecta (FR-015, FR-016)
@@ -168,27 +168,27 @@ o trim salvo é restaurado
 
 > **NOTE: Escrever estes testes PRIMEIRO, garantir que FALHAM antes da implementação**
 
-- [ ] T023 [P] [US2] Testes unitários do clamp de `TrimDb` para o range [-12.0, +12.0] em
+- [X] T023 [P] [US2] Testes unitários do clamp de `TrimDb` para o range [-12.0, +12.0] em
       `tests/AirControl.Core.Tests/TrimTests.cs`
-- [ ] T024 [P] [US2] Teste de integração: `SetTrim` reflete em `LevelsChanged` dentro de 100ms
+- [X] T024 [P] [US2] Teste de integração: `SetTrim` reflete em `LevelsChanged` dentro de 100ms
       (SC-002) usando `FakeAudioEngine`, em
       `tests/AirControl.Integration.Tests/TrimIntegrationTests.cs`
-- [ ] T025 [P] [US2] Teste de integração: `TrimDb` salvo via `ISettingsRepository` é restaurado
+- [X] T025 [P] [US2] Teste de integração: `TrimDb` salvo via `ISettingsRepository` é restaurado
       corretamente ao recarregar o profile (SC-004), em
       `tests/AirControl.Integration.Tests/TrimPersistenceIntegrationTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Implementar `SetTrim(channel, trimDb)` em
+- [X] T026 [US2] Implementar `SetTrim(channel, trimDb)` em
       `src/AirControl.Audio/AudioEngine.cs`, clampeando para [-12, +12] e aplicando ganho digital
       ao buffer já capturado do canal correspondente, sem afetar o outro canal (FR-006, FR-007,
       FR-008)
-- [ ] T027 [US2] Criar `TrimControlViewModel` por canal em
+- [X] T027 [US2] Criar `TrimControlViewModel` por canal em
       `src/AirControl.App/ViewModels/TrimControlViewModel.cs`, vinculado a um `Slider` de -12 a
       +12 dB, chamando `IAudioEngine.SetTrim` a cada mudança
-- [ ] T028 [US2] Adicionar `Slider` de trim por canal em `src/AirControl.App/Views/MainWindow.xaml`
+- [X] T028 [US2] Adicionar `Slider` de trim por canal em `src/AirControl.App/Views/MainWindow.xaml`
       com `AutomationProperties.Name`/`HelpText` legíveis por leitor de tela (FR-020)
-- [ ] T029 [US2] Carregar `ChannelSettingsProfile.Input{1,2}.TrimDb` no startup e aplicar via
+- [X] T029 [US2] Carregar `ChannelSettingsProfile.Input{1,2}.TrimDb` no startup e aplicar via
       `SetTrim`; salvar o valor (debounced, ex. ao soltar o slider) via `ISettingsRepository` em
       `src/AirControl.App/ViewModels/TrimControlViewModel.cs` (FR-014)
 
@@ -208,26 +208,26 @@ Input 1 silencia enquanto o Input 2 (com sinal próprio) permanece inalterado
 
 > **NOTE: Escrever estes testes PRIMEIRO, garantir que FALHAM antes da implementação**
 
-- [ ] T030 [P] [US3] Testes unitários da resolução `EffectivelyAudible` no caso sem solo
+- [X] T030 [P] [US3] Testes unitários da resolução `EffectivelyAudible` no caso sem solo
       (`EffectivelyAudible(ch) = !ch.IsMuted`) em
       `tests/AirControl.Core.Tests/MuteSoloResolutionTests.cs`
-- [ ] T031 [P] [US3] Teste de integração: `SetMute` silencia apenas o canal alvo no
+- [X] T031 [P] [US3] Teste de integração: `SetMute` silencia apenas o canal alvo no
       monitoramento/levels, canal não-mutado permanece ativo, usando `FakeAudioEngine` em
       `tests/AirControl.Integration.Tests/MuteIntegrationTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Implementar `SetMute(channel, isMuted)` e a resolução de `IsEffectivelyAudible`
+- [X] T032 [US3] Implementar `SetMute(channel, isMuted)` e a resolução de `IsEffectivelyAudible`
       para o caminho sem solo em `src/AirControl.Audio/AudioEngine.cs`, aplicando o silenciamento
       ao playthrough de saída (FR-009, FR-018, FR-019)
-- [ ] T033 [US3] Criar `MuteButtonViewModel` por canal em
+- [X] T033 [US3] Criar `MuteButtonViewModel` por canal em
       `src/AirControl.App/ViewModels/MuteButtonViewModel.cs` vinculado a um `ToggleButton`,
       chamando `IAudioEngine.SetMute`
-- [ ] T034 [US3] Adicionar `ToggleButton` de Mute por canal em
+- [X] T034 [US3] Adicionar `ToggleButton` de Mute por canal em
       `src/AirControl.App/Views/MainWindow.xaml` com estado visual persistente (não só no
       instante do toggle) e `AutomationProperties`/`LiveSetting` anunciando a mudança (FR-013,
       FR-020)
-- [ ] T035 [US3] Persistir `IsMuted` via `ISettingsRepository` a cada toggle e restaurar no
+- [X] T035 [US3] Persistir `IsMuted` via `ISettingsRepository` a cada toggle e restaurar no
       startup em `src/AirControl.App/ViewModels/MuteButtonViewModel.cs` (FR-014)
 
 **Checkpoint**: User Stories 1, 2 E 3 funcionam de forma independente
@@ -248,29 +248,29 @@ e confirmar que ambos retornam ao estado de mute/trim anterior
 
 > **NOTE: Escrever estes testes PRIMEIRO, garantir que FALHAM antes da implementação**
 
-- [ ] T036 [P] [US4] Testes unitários da máquina de estados de solo em
+- [X] T036 [P] [US4] Testes unitários da máquina de estados de solo em
       `tests/AirControl.Core.Tests/MuteSoloResolutionTests.cs`: solo único isola o canal
       independentemente do mute (FR-010, solo sobrepõe mute), ambos soloed simultaneamente
       equivale a nenhum soloed (FR-012), e liberar solo restaura o `PreSoloMuteState` de cada
       canal (FR-011)
-- [ ] T037 [P] [US4] Teste de integração: engajar Solo no Input 1 silencia o Input 2
+- [X] T037 [P] [US4] Teste de integração: engajar Solo no Input 1 silencia o Input 2
       independentemente do seu mute; liberar o solo restaura o mute/trim anterior de ambos os
       canais, usando `FakeAudioEngine`, em
       `tests/AirControl.Integration.Tests/SoloIntegrationTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Implementar `SetSolo(channel, isSoloed)` em
+- [X] T038 [US4] Implementar `SetSolo(channel, isSoloed)` em
       `src/AirControl.Audio/AudioEngine.cs`: snapshot de `IsMuted` de todos os canais ao entrar em
       solo (`PreSoloMuteState`), resolução `AllSoloed` equivalente a nenhum soloed (FR-012), e
       restauração do `PreSoloMuteState` ao desengajar o único canal soloed (FR-011)
-- [ ] T039 [US4] Criar `SoloButtonViewModel` por canal em
+- [X] T039 [US4] Criar `SoloButtonViewModel` por canal em
       `src/AirControl.App/ViewModels/SoloButtonViewModel.cs` vinculado a um `ToggleButton`,
       chamando `IAudioEngine.SetSolo`
-- [ ] T040 [US4] Adicionar `ToggleButton` de Solo por canal em
+- [X] T040 [US4] Adicionar `ToggleButton` de Solo por canal em
       `src/AirControl.App/Views/MainWindow.xaml` com estado visual persistente e
       `AutomationProperties`/`LiveSetting` anunciando a mudança (FR-013, FR-020)
-- [ ] T041 [US4] Persistir `IsSoloed` via `ISettingsRepository` a cada toggle e restaurar no
+- [X] T041 [US4] Persistir `IsSoloed` via `ISettingsRepository` a cada toggle e restaurar no
       startup em `src/AirControl.App/ViewModels/SoloButtonViewModel.cs` (FR-014)
 
 **Checkpoint**: Todas as user stories (US1-US4) funcionam de forma independente
@@ -281,18 +281,18 @@ e confirmar que ambos retornam ao estado de mute/trim anterior
 
 **Purpose**: Melhorias que afetam múltiplas user stories
 
-- [ ] T042 [P] Atualizar `README.md` na raiz do repositório com instruções de setup/build/run
+- [X] T042 [P] Atualizar `README.md` na raiz do repositório com instruções de setup/build/run
       (espelhando quickstart.md)
-- [ ] T043 Passo de limpeza de código: revisar nomes, remover código morto/comentado, garantir
+- [X] T043 Passo de limpeza de código: revisar nomes, remover código morto/comentado, garantir
       zero warnings em todos os projetos (Constitution: Code Quality)
-- [ ] T044 [P] Testes unitários adicionais para lógica de domínio não coberta (ex.: buffers vazios
+- [X] T044 [P] Testes unitários adicionais para lógica de domínio não coberta (ex.: buffers vazios
       ou silenciosos no cálculo de peak/RMS) em `tests/AirControl.Core.Tests/`
-- [ ] T045 Verificar os orçamentos de performance de plan.md: adicionar/rodar teste de integração
+- [X] T045 Verificar os orçamentos de performance de plan.md: adicionar/rodar teste de integração
       medindo a latência `SetTrim`/`SetMute`/`SetSolo` → `LevelsChanged` (< 100ms, SC-002) e a
       detecção de conexão/desconexão (< 3s, SC-005) em
       `tests/AirControl.Integration.Tests/PerformanceBudgetTests.cs` (Constitution: Performance
       Requirements)
-- [ ] T046 [P] Verificar consistência de UX e acessibilidade: navegação completa por teclado em
+- [X] T046 [P] Verificar consistência de UX e acessibilidade: navegação completa por teclado em
       todos os controles (meters, trim, mute, solo), contraste adequado nos estados visuais
       (incluindo clipping/mute/solo) e anúncios corretos por leitor de tela (FR-020, Constitution:
       User Experience Consistency)

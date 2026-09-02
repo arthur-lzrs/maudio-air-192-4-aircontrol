@@ -1,0 +1,36 @@
+<UserControl x:Class="AirControl.App.Views.MeterControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:AirControl.App.Converters"
+             x:Name="Root">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:ClippingToBrushConverter x:Key="ClippingToBrushConverter" />
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+    </UserControl.Resources>
+    <StackPanel Orientation="Vertical" Width="140"
+                AutomationProperties.Name="{Binding ChannelLabel, ElementName=Root}"
+                AutomationProperties.LiveSetting="Polite">
+        <TextBlock Text="{Binding ChannelLabel, ElementName=Root}" HorizontalAlignment="Center" FontWeight="Bold" />
+
+        <TextBlock Text="Peak" FontSize="10" Margin="0,4,0,0" />
+        <ProgressBar Height="16" Minimum="-96" Maximum="12"
+                     Value="{Binding PeakDb, ElementName=Root, Mode=OneWay}"
+                     Foreground="{Binding IsClipping, ElementName=Root, Converter={StaticResource ClippingToBrushConverter}}"
+                     AutomationProperties.Name="Nível de pico" />
+
+        <TextBlock Text="RMS" FontSize="10" Margin="0,4,0,0" />
+        <ProgressBar Height="10" Minimum="-96" Maximum="12"
+                     Value="{Binding RmsDb, ElementName=Root, Mode=OneWay}"
+                     AutomationProperties.Name="Nível RMS" />
+
+        <TextBlock Text="CLIPPING" Foreground="Red" FontWeight="Bold" HorizontalAlignment="Center"
+                   Margin="0,4,0,0"
+                   Visibility="{Binding IsClipping, ElementName=Root, Converter={StaticResource BoolToVisibilityConverter}}"
+                   AutomationProperties.Name="Clipping detectado" />
+
+        <TextBlock Text="Dispositivo não conectado" Foreground="Gray" FontStyle="Italic" FontSize="10"
+                   HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="Wrap"
+                   Visibility="{Binding IsDeviceConnected, ElementName=Root, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+    </StackPanel>
+</UserControl>

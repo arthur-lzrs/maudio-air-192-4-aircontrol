@@ -1,0 +1,80 @@
+<Window x:Class="AirControl.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:AirControl.App.Views"
+        Title="AIR Control" Height="420" Width="420"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Margin="0,0,0,12" FontSize="14" FontWeight="Bold"
+                   Text="{Binding DeviceStatus.StatusText}"
+                   AutomationProperties.Name="Status de conexão do AIR 192|4"
+                   AutomationProperties.LiveSetting="Polite" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+            <StackPanel Margin="0,0,24,0" Width="140">
+                <views:MeterControl ChannelLabel="Input 1"
+                                     PeakDb="{Binding Input1Meter.PeakDb}"
+                                     RmsDb="{Binding Input1Meter.RmsDb}"
+                                     IsClipping="{Binding Input1Meter.IsClipping}"
+                                     IsDeviceConnected="{Binding Input1Meter.IsDeviceConnected}" />
+
+                <TextBlock Text="Trim (dB)" FontSize="10" Margin="0,12,0,0" />
+                <Slider x:Name="Input1TrimSlider"
+                        Minimum="{Binding Input1Trim.MinDb}"
+                        Maximum="{Binding Input1Trim.MaxDb}"
+                        Value="{Binding Input1Trim.TrimDb, Mode=TwoWay}"
+                        TickFrequency="1" IsSnapToTickEnabled="False"
+                        AutomationProperties.Name="Trim do Input 1"
+                        AutomationProperties.HelpText="Ajusta o ganho digital do Input 1 entre -12 e +12 dB" />
+                <TextBlock Text="{Binding Input1Trim.TrimDb, StringFormat={}{0:0.0} dB}"
+                           HorizontalAlignment="Center" FontSize="10" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+                    <ToggleButton Content="Mute" Padding="4" Margin="0,0,4,0"
+                                  IsChecked="{Binding Input1Mute.IsMuted, Mode=TwoWay}"
+                                  AutomationProperties.Name="Mute do Input 1"
+                                  AutomationProperties.LiveSetting="Assertive" />
+                    <ToggleButton Content="Solo" Padding="4"
+                                  IsChecked="{Binding Input1Solo.IsSoloed, Mode=TwoWay}"
+                                  AutomationProperties.Name="Solo do Input 1"
+                                  AutomationProperties.LiveSetting="Assertive" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Width="140">
+                <views:MeterControl ChannelLabel="Input 2"
+                                     PeakDb="{Binding Input2Meter.PeakDb}"
+                                     RmsDb="{Binding Input2Meter.RmsDb}"
+                                     IsClipping="{Binding Input2Meter.IsClipping}"
+                                     IsDeviceConnected="{Binding Input2Meter.IsDeviceConnected}" />
+
+                <TextBlock Text="Trim (dB)" FontSize="10" Margin="0,12,0,0" />
+                <Slider x:Name="Input2TrimSlider"
+                        Minimum="{Binding Input2Trim.MinDb}"
+                        Maximum="{Binding Input2Trim.MaxDb}"
+                        Value="{Binding Input2Trim.TrimDb, Mode=TwoWay}"
+                        TickFrequency="1" IsSnapToTickEnabled="False"
+                        AutomationProperties.Name="Trim do Input 2"
+                        AutomationProperties.HelpText="Ajusta o ganho digital do Input 2 entre -12 e +12 dB" />
+                <TextBlock Text="{Binding Input2Trim.TrimDb, StringFormat={}{0:0.0} dB}"
+                           HorizontalAlignment="Center" FontSize="10" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+                    <ToggleButton Content="Mute" Padding="4" Margin="0,0,4,0"
+                                  IsChecked="{Binding Input2Mute.IsMuted, Mode=TwoWay}"
+                                  AutomationProperties.Name="Mute do Input 2"
+                                  AutomationProperties.LiveSetting="Assertive" />
+                    <ToggleButton Content="Solo" Padding="4"
+                                  IsChecked="{Binding Input2Solo.IsSoloed, Mode=TwoWay}"
+                                  AutomationProperties.Name="Solo do Input 2"
+                                  AutomationProperties.LiveSetting="Assertive" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

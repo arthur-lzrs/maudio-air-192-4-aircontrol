@@ -1,0 +1,30 @@
+<Window x:Class="AirControl.App.Views.OutputDeviceSelectorView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Selecionar dispositivo de saída" Height="260" Width="420"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Margin="0,0,0,8" TextWrapping="Wrap"
+                   Text="Escolha o dispositivo de saída Windows onde o monitoramento do AIR 192|4 será reproduzido:" />
+
+        <ListBox Grid.Row="1"
+                 x:Name="DeviceListBox"
+                 ItemsSource="{Binding AvailableDevices}"
+                 SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                 DisplayMemberPath="FriendlyName"
+                 AutomationProperties.Name="Lista de dispositivos de saída disponíveis" />
+
+        <Button Grid.Row="2" Margin="0,12,0,0" HorizontalAlignment="Right"
+                Content="Confirmar" Padding="12,4"
+                Command="{Binding ConfirmCommand}"
+                IsDefault="True"
+                AutomationProperties.Name="Confirmar dispositivo de saída selecionado" />
+    </Grid>
+</Window>
