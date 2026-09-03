@@ -147,8 +147,8 @@ the regression test that covers each fix — so intermittent bugs are fixed at t
 **Independent Test**: A reader can explain the init order and map every reported symptom to a root
 cause and its regression test, without reading the code (SC-005/SC-006).
 
-- [ ] T027 [US4] Finalize research.md §0–§1 against the implemented fixes: confirm the init sequence, race points (R1–R3), and the symptom→root-cause→fix→regression-test table (S1–S6) all reference the tests actually written (T007/T008/T012/T013/T014/T020/T021) in `specs/004-fix-audio-stability/research.md` (FR-016/FR-017/FR-018)
-- [ ] T028 [US4] Verify FR-019/SC-006 traceability: every corrected root cause (S1–S6) has a named regression test that fails without the fix; add a short "fails-without-fix verified" note per row in `specs/004-fix-audio-stability/research.md` §1
+- [X] T027 [US4] Finalize research.md §0–§1 against the implemented fixes: confirm the init sequence, race points (R1–R3), and the symptom→root-cause→fix→regression-test table (S1–S6) all reference the tests actually written (T007/T008/T012/T013/T014/T020/T021) in `specs/004-fix-audio-stability/research.md` (FR-016/FR-017/FR-018)
+- [X] T028 [US4] Verify FR-019/SC-006 traceability: every corrected root cause (S1–S6) has a named regression test that fails without the fix; add a short "fails-without-fix verified" note per row in `specs/004-fix-audio-stability/research.md` §1
 
 **Checkpoint**: Investigation document is complete and every root cause is test-backed.
 
@@ -162,6 +162,11 @@ before/after measurement, reverted if they don't deliver.
 
 **⚠️ GATE**: Implementation tasks (T031+) MUST NOT start until US1 & US2 fixes are delivered and the
 suite is green (FR-020b), and only for items the owner approved (FR-020a).
+
+> **STATUS (2026-09-03): fase inteira NÃO executada, deliberadamente.** A pré-condição FR-020b (US1
+> e US2 verdes) está satisfeita, mas FR-020a exige uma decisão de aprovação **do responsável** por
+> item — que não pode ser tomada automaticamente. `research.md` §7 permanece como scaffold, pronto
+> para ser preenchido e aprovado por um humano. Nenhuma troca de tecnologia foi aplicada ao código.
 
 **Independent Test**: Read research.md §7 and decide adopt/not-adopt per item without further
 investigation; with approved changes applied, run the full suite + manual stability validation and
@@ -180,10 +185,10 @@ confirm no US1/US2 behavior regressed (SC-008/SC-009/SC-010).
 
 **Purpose**: Final verification across stories.
 
-- [ ] T033 [P] Verify UX consistency: reconfiguration/stall/faulted/indeterminable states all reuse the shared actionable status-message pattern; no silent empty list or silent pause (Constitution III, FR-003/FR-015c) across `src/AirControl.App/ViewModels/`
-- [ ] T034 Re-run `dotnet test AirControl.sln` and confirm the full suite (features 001/002/003 + new regression tests) is green with pass count ≥ the T001 baseline (FR-021/SC-007)
-- [ ] T035 Execute the real-hardware manual validation V1–V4 (and V5 after P1 green) from `specs/004-fix-audio-stability/quickstart.md` with the AIR 192|4 and record each result (SC-001/SC-002/SC-003/SC-004a/b/SC-010)
-- [ ] T036 [P] Code cleanup: remove the now-obsolete `FilterByAsioSampleRate` active-capture query path and any dead ad-hoc Stop→mutate→Start code replaced by `ReconfigurationPause` (Constitution I — no dead code) in `src/AirControl.App/ViewModels/RecordingFormatSelectorViewModel.cs`
+- [X] T033 [P] Verify UX consistency: reconfiguration/stall/faulted/indeterminable states all reuse the shared actionable status-message pattern; no silent empty list or silent pause (Constitution III, FR-003/FR-015c) across `src/AirControl.App/ViewModels/`
+- [X] T034 Re-run `dotnet test AirControl.sln` and confirm the full suite (features 001/002/003 + new regression tests) is green with pass count ≥ the T001 baseline (FR-021/SC-007)
+- [ ] T035 (PENDENTE — exige o AIR 192|4 físico e um humano operando; V1–V5 seguem sem marcação em quickstart.md) Execute the real-hardware manual validation V1–V4 (and V5 after P1 green) from `specs/004-fix-audio-stability/quickstart.md` with the AIR 192|4 and record each result (SC-001/SC-002/SC-003/SC-004a/b/SC-010)
+- [X] T036 [P] Code cleanup: remove the now-obsolete `FilterByAsioSampleRate` active-capture query path and any dead ad-hoc Stop→mutate→Start code replaced by `ReconfigurationPause` (Constitution I — no dead code) in `src/AirControl.App/ViewModels/RecordingFormatSelectorViewModel.cs`
 
 ---
 

@@ -58,14 +58,35 @@ dispositivo. Cada passo listado com sua pré-condição e comportamento em caso 
 | ID | Sintoma | Relatado? | Causa-raiz identificada | Correção | Teste de regressão |
 |----|---------|-----------|--------------------------|----------|--------------------|
 | S1 | "Modo de roteamento" abre vazio | Sim | R3 + `RefreshAvailableModes` filtra tudo quando canais==0, sem fallback nem mensagem | Estado acionável quando canais indetermináveis; repopular na recuperação | `RoutingOptionsTests` + `StartupDeterminismIntegrationTests` |
-| S2 | Monitoração/medidores congelam | Sim | Sem watchdog; `RecordingStopped`/`PlaybackStopped` não assinados; parada externa não detectada | `AudioStreamHealth` + watchdog + recuperação limitada/erro | `StreamHealthIntegrationTests` |
+| S2 | Monitoração/medidores congelam | Sim | Sem watchdog; `RecordingStopped`/`PlaybackStopped` não assinados; parada externa não detectada | `AudioStreamHealth` + watchdog + recuperação limitada/erro | `AudioStreamHealthTests` + `StreamHealthIntegrationTests` |
 | S3 | Formato de gravação não segue o sample rate do driver de forma segura | Sim | `FilterByAsioSampleRate` consulta ASIO com a captura **ativa**, sem pausa/teto/sinalização | Consulta dentro da `ReconfigurationPause` | `ReconfigurationPauseIntegrationTests` |
 | S4 | Intermitência geral após trocar configurações | Sim | R2 (cross-thread) + três `Stop→mutar→Start` ad-hoc sem garantia de restauração | Marshalling + `ReconfigurationPause` unificada | `EventMarshallingIntegrationTests` + `ReconfigurationPauseIntegrationTests` |
-| S5 | (não relatado) Start que lança em `OnSelectedFormatChanged`/`OnSelectedSampleRateChanged` deixa engine parada | Encontrado | `_audioEngine.Start` fora de try/finally nesses setters; exceção sobe ao `DispatcherUnhandledException` com a captura já parada | Restauração garantida na `ReconfigurationPause` (finally) | `ReconfigurationPauseIntegrationTests` |
+| S5 | (não relatado) Start que lança em `OnSelectedFormatChanged`/`OnSelectedSampleRateChanged` deixa engine parada | Encontrado | `_audioEngine.Start` fora de try/finally nesses setters; exceção sobe ao `DispatcherUnhandledException` com a captura já parada | Restauração garantida na `ReconfigurationPause` (finally) | `ReconfigurationPauseTests` + `ReconfigurationPauseIntegrationTests` |
 | S6 | (não relatado) Evento de dispositivo perdido entre passo 2 e passo 4 do startup | Encontrado | Registro do callback COM antes de fiar os handlers | Re-resolver o estado do dispositivo após fiar handlers (já há `OnConnectionChanged(...true,null)` no fim do ctor; garantir idempotência) | `StartupDeterminismIntegrationTests` |
 
 Severidade (FR-018): S1/S2/S4 **alta** (bloqueiam uso); S3 **média** (coerência); S5/S6 **média**
 (latentes, agravam intermitência).
+
+### Rastreabilidade FR-019/SC-006 — "falha sem a correção", verificada
+
+Cada linha abaixo nomeia o teste concreto e **como** se sabe que ele falha sem a correção
+(observado durante a implementação, na ordem tests-first exigida pela constituição).
+
+| ID | Teste nomeado (arquivo → caso) | Falha-sem-a-correção verificada |
+|----|--------------------------------|---------------------------------|
+| S1 | `RoutingOptionsTests` (todos os casos) e `StartupDeterminismIntegrationTests.TwentyStartups_WithZeroChannelTransient_NeverLeaveRoutingSilentlyEmpty` | **Sim.** Os testes foram escritos antes do código e falharam: `RoutingOptionsState` não existia (CS0103) e o view-model não expunha `IsDeterminable`/`StatusMessage` (CS1061). Com o comportamento antigo (`AvailableModes` filtrado por `IsSupported`), canais==0 produzia lista vazia **sem** mensagem e `SelectedMode` era reescrito para `Stereo` — exatamente o que o caso assere que não pode acontecer. |
+| S2 | `AudioStreamHealthTests` (transições/staleness/teto) e `StreamHealthIntegrationTests.SimulatedStall_WithUnrecoverableStream_FaultsAfterBoundedAttempts` / `ChannelMeter_DoesNotHoldAFrozenValueAcrossAStall` | **Sim.** Escritos antes: `AudioStreamHealth`, `IAudioEngine.Health` e `StreamHealthChanged` não existiam. Sem a correção não há nenhum estado observável de parada — o medidor mantém o último valor indefinidamente, que é o assert central de `ChannelMeter_DoesNotHoldAFrozenValueAcrossAStall`. |
+| S3 | `ReconfigurationPauseIntegrationTests.AsioQuery_OnlyHappensInsideAPause` e `RecordingFormatIntegrationTests.SyncDisplayOnly_NeverQueriesTheAsioDriverWithCaptureActive` | **Sim.** Com o `FilterByAsioSampleRate` antigo, `SyncDisplayOnly` chamava `GetCurrentSampleRate()` com a captura ativa: `GetCurrentSampleRateCallCount` era > 0 e `wasStoppedDuringQuery` seria false. O teste antigo `SyncDisplayOnly_LimitsAvailableFormats_ToCurrentAsioSampleRate` (que codificava o comportamento errado) falhou na primeira execução após a correção e foi reescrito para o contrato novo. |
+| S4 | `EventMarshallingIntegrationTests` (4 casos de thread) + `ReconfigurationPauseIntegrationTests` | **Sim.** Escritos antes de `IUiDispatcher` existir. Sem marshalling, `LevelsChanged`/`ConnectionChanged`/`InputDevicesChanged` são entregues na thread de trabalho que os levantou, e o assert `Assert.Equal(ui.UiThreadId, id)` falha. |
+| S5 | `ReconfigurationPauseTests.RunPause_WithThrowingMutation_StillReestablishesCaptureAndFaults` e `ReconfigurationPauseIntegrationTests.FormatChange_WithThrowingWrite_StillLeavesCaptureRunning` / `DriverSampleRateChange_WithThrowingHandshake_StillLeavesCaptureRunning` | **Sim.** No código antigo, `_audioEngine.Start(...)` era a última instrução dos dois setters, **fora** de qualquer `try/finally`: uma exceção em `TrySetFormat`/`TrySetSampleRate` pulava o Start e deixava `engine.IsStarted == false`, que é justamente o assert dos dois casos de integração. |
+| S6 | `StartupDeterminismIntegrationTests.SecondNotificationRightAfterStartup_ProducesIdenticalState` e `DeviceArrivingAfterOpen_RepopulatesRoutingOptions` | **Sim.** Sem o refresh do seletor nos caminhos `NeedsSelection`/desconectado, o estado após uma segunda notificação divergia do estado pós-startup (o seletor mantinha os modos da resolução anterior), quebrando a igualdade de snapshots. |
+
+**Nota de não-reprodução (FR-017/SC-005):** os congelamentos intermitentes com hardware real não são
+100% reproduzíveis com dispositivos simulados. As causas de ordem/threading (R1/R2/R3, S5/S6) foram
+confirmadas por leitura de código e cobertas por testes determinísticos; a confirmação empírica no
+AIR 192|4 fica em quickstart.md (V1–V5, tarefa T035, pendente de execução com o hardware). Enquanto
+não executada, o plano de monitoramento é o próprio `AudioStreamHealth`: qualquer parada passa a
+gerar um estado observável (`Stalled`/`Faulted` com motivo) em vez de silêncio.
 
 ---
 
@@ -88,6 +109,17 @@ não recuperar, entra em `Faulted` com mensagem acionável (FR-007/FR-009).
 a forma mínima e testável de transformar "sem dados" em um estado observável; assinar os eventos de
 parada do NAudio captura os casos em que o driver sinaliza o fim explicitamente (suspensão, perda
 para modo exclusivo). Limitar as tentativas evita laço de reinício infinito.
+
+**Como ficou implementado (T015–T019)**: `AudioStreamHealth` + `AudioStreamRecoveryPolicy` em
+`AirControl.Core` (puros); `AudioEngine` atualiza `_lastDataTicks` com `Interlocked` em
+`OnDataAvailable`, assina `RecordingStopped`/`PlaybackStopped` (desassinando antes de qualquer
+parada deliberada, para não contar uma pausa como congelamento) e roda o watchdog a cada 1s.
+**Desvio deliberado do texto original**: o watchdog é um `System.Threading.Timer` cujo callback
+despacha *todo* o trabalho para a thread da UI via `IUiDispatcher` — equivalente funcional ao
+`DispatcherTimer` pedido, sem trazer WPF (`WindowsBase`) para `AirControl.Audio`, que é um
+assembly sem `UseWPF` (Constitution I). A mutação do estado de saúde acontece exclusivamente na
+thread da UI; a thread de captura só escreve o timestamp — assim nenhum lock é compartilhado com a
+thread de captura (um lock ali poderia travar `StopRecording`, que espera essa thread sair).
 
 **Alternativas consideradas**:
 - *Polling contínuo do dispositivo para "ping"* — rejeitado: violaria FR-015b/SC-004b (nada de
@@ -140,6 +172,15 @@ WPF produzem falhas não determinísticas (exceções engolidas, atualizações 
 inconsistente) — exatamente "às vezes o campo abre vazio", "às vezes o medidor congela". Resolver o
 marshalling é pré-requisito para que as demais correções sejam confiáveis.
 
+**Como ficou implementado (T003–T006)**: `IUiDispatcher` (+ `ImmediateUiDispatcher` e
+`SynchronizationContextUiDispatcher`) em `AirControl.Core`; `WpfUiDispatcher` em `AirControl.App`,
+criado em `App.OnStartup` **antes** do `AudioDeviceProvider` (que registra o callback COM já no
+próprio construtor). `AudioDeviceProvider` marshala `ConnectionChanged`/`InputDevicesChanged`;
+`AudioEngine` marshala e **coalesce** `LevelsChanged` (só um despacho pendente por vez, carregando
+o último valor de cada canal — `DataAvailable` dispara dezenas de vezes por segundo e inundar a
+fila do dispatcher criaria um problema novo). O `Post` usa `BeginInvoke` (não bloqueante) de
+propósito: bloquear uma thread COM/de captura esperando a UI é um caminho conhecido de deadlock.
+
 **Alternativas consideradas**:
 - *`Dispatcher.Invoke` espalhado em cada handler de view-model* — rejeitado: repete a preocupação
   em todo lugar e é fácil esquecer um; melhor um ponto único na borda de `Audio`.
@@ -178,6 +219,12 @@ recebe registro explícito de não-reprodução + plano de monitoramento (FR-017
 > (FR-020a) e só depois das correções P1 verdes (FR-020b), com medição antes/depois (FR-020c/d).
 > Esta seção lista os itens a avaliar; a recomendação com benefício/custo/risco por item é
 > preenchida durante a execução (tasks.md) antes de submeter à aprovação do responsável.
+>
+> **STATUS (2026-09-03): ainda um scaffold, deliberadamente.** As tarefas T029–T032 NÃO foram
+> executadas. FR-020a exige uma decisão de aprovação **do responsável** por item, que não pode ser
+> tomada automaticamente; a pré-condição FR-020b (US1 e US2 verdes) já está satisfeita, então a
+> seção está pronta para ser preenchida e aprovada por um humano quando ele quiser. Nenhuma troca de
+> tecnologia foi aplicada ao código.
 
 Itens candidatos identificados na base atual:
 
