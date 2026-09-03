@@ -18,7 +18,7 @@ public class PerformanceBudgetTests
     public void SetTrim_ToLevelsChanged_IsWithinBudget()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
         var samples = new float[] { 0.3f, -0.3f };
 
         var stopwatch = Stopwatch.StartNew();
@@ -33,7 +33,7 @@ public class PerformanceBudgetTests
     public void SetMute_ToEffectiveAudibilityChange_IsWithinBudget()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
 
         var stopwatch = Stopwatch.StartNew();
         engine.SetMute(InputChannelId.Input1, true);
@@ -48,7 +48,7 @@ public class PerformanceBudgetTests
     public void SetSolo_ToEffectiveAudibilityChange_IsWithinBudget()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
 
         var stopwatch = Stopwatch.StartNew();
         engine.SetSolo(InputChannelId.Input1, true);
@@ -56,6 +56,38 @@ public class PerformanceBudgetTests
         stopwatch.Stop();
 
         Assert.False(input2Audible);
+        Assert.True(stopwatch.ElapsedMilliseconds < LevelsChangedBudgetMs);
+    }
+
+    [Fact]
+    public void SetRoutingMode_ToLevelsChanged_IsWithinBudget()
+    {
+        var engine = new FakeAudioEngine();
+        engine.Start(null, "fake-output");
+
+        var stopwatch = Stopwatch.StartNew();
+        engine.SetRoutingMode(RoutingMode.CombinedMono);
+        engine.PushRoutedSamples(new float[] { 0.4f }, new float[] { 0.4f });
+        stopwatch.Stop();
+
+        Assert.Equal(RoutingMode.CombinedMono, engine.RoutingMode);
+        Assert.True(stopwatch.ElapsedMilliseconds < LevelsChangedBudgetMs);
+    }
+
+    [Fact]
+    public void DeviceSwitch_StopThenStart_ReflectsInLevelsChangedWithinBudget()
+    {
+        var engine = new FakeAudioEngine();
+        engine.Start("device-a", "fake-output");
+
+        var stopwatch = Stopwatch.StartNew();
+        engine.Stop();
+        engine.Start("device-b", "fake-output");
+        engine.PushRoutedSamples(new float[] { 0.4f }, new float[] { 0.4f });
+        stopwatch.Stop();
+
+        Assert.True(engine.IsStarted);
+        Assert.Equal("device-b", engine.InputDeviceId);
         Assert.True(stopwatch.ElapsedMilliseconds < LevelsChangedBudgetMs);
     }
 

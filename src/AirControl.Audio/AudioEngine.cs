@@ -22,20 +22,19 @@ public class AudioEngine : IAudioEngine, IDisposable
     private MediaFoundationResampler? _resampler;
     private bool _monitoringEnabled = true;
     private string? _captureFormatDescription;
+    private RoutingMode _routingMode;
+    private int _activeInputChannelCount;
 
     public event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
 
-    public void Start(string outputDeviceId)
+    public void Start(string? inputDeviceId, string outputDeviceId)
     {
         Stop();
 
         try
         {
             using var enumerator = new MMDeviceEnumerator();
-            var inputDevice = enumerator
-                .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-                .FirstOrDefault(d => d.FriendlyName.Contains(AirDeviceNameFragment, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException("AIR 192|4 não encontrado entre os dispositivos de captura ativos.");
+            var inputDevice = ResolveInputDevice(enumerator, inputDeviceId);
 
             var outputDevice = ResolveOutputDevice(enumerator, outputDeviceId);
 
@@ -50,6 +49,9 @@ public class AudioEngine : IAudioEngine, IDisposable
             _output.Play();
 
             var format = _capture.WaveFormat;
+            _activeInputChannelCount = format.Channels;
+            _routingMode = RoutingModeApplier.ResolveFallback(_routingMode, _activeInputChannelCount);
+
             var channelWarning = format.Channels != 2
                 ? " ⚠ esperado 2 canais (Input1/Input2 seriam duplicados ou mal mapeados)"
                 : string.Empty;
@@ -63,6 +65,35 @@ public class AudioEngine : IAudioEngine, IDisposable
             Stop();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Resolve o dispositivo de entrada pelo id informado, se ainda ativo; caso contrário (ou se
+    /// nenhum id foi informado), cai para a mesma auto-detecção do AIR 192|4 usada antes desta
+    /// extensão (research.md §4).
+    /// </summary>
+    private static MMDevice ResolveInputDevice(MMDeviceEnumerator enumerator, string? inputDeviceId)
+    {
+        if (inputDeviceId is not null)
+        {
+            try
+            {
+                var device = enumerator.GetDevice(inputDeviceId);
+                if (device.State == DeviceState.Active)
+                {
+                    return device;
+                }
+            }
+            catch (COMException)
+            {
+                // Dispositivo salvo não existe mais; cai para a auto-detecção abaixo.
+            }
+        }
+
+        return enumerator
+            .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+            .FirstOrDefault(d => d.FriendlyName.Contains(AirDeviceNameFragment, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("AIR 192|4 não encontrado entre os dispositivos de captura ativos.");
     }
 
     /// <summary>
@@ -187,6 +218,7 @@ public class AudioEngine : IAudioEngine, IDisposable
 
         _outputBuffer = null;
         _captureFormatDescription = null;
+        _activeInputChannelCount = 0;
     }
 
     public void SetTrim(InputChannelId channel, double trimDb) => _trimDb[channel] = TrimCalculator.Clamp(trimDb);
@@ -207,6 +239,12 @@ public class AudioEngine : IAudioEngine, IDisposable
 
     public string? CaptureFormatDescription => _captureFormatDescription;
 
+    public RoutingMode RoutingMode => _routingMode;
+
+    public void SetRoutingMode(RoutingMode mode) => _routingMode = RoutingModeApplier.ResolveFallback(mode, _activeInputChannelCount);
+
+    public int ActiveInputChannelCount => _activeInputChannelCount;
+
     /// <summary>
     /// Lê o formato de amostra real do dispositivo (bits/encoding), em vez de assumir float de
     /// 32 bits: o mix format compartilhado do WASAPI para o AIR 192|4 é tipicamente PCM de 16 ou
@@ -226,8 +264,8 @@ public class AudioEngine : IAudioEngine, IDisposable
         var channelCount = format.Channels;
         var sampleCount = e.BytesRecorded / bytesPerSample / channelCount;
 
-        var input1 = new float[sampleCount];
-        var input2 = new float[sampleCount];
+        var routedLeft = new float[sampleCount];
+        var routedRight = new float[sampleCount];
         var processed = new byte[e.BytesRecorded];
 
         var leftGain = TrimCalculator.ToLinearGain(_trimDb[InputChannelId.Input1]);
@@ -244,23 +282,29 @@ public class AudioEngine : IAudioEngine, IDisposable
                 ? SampleFormatIO.ReadSample(e.Buffer, frameOffset + bytesPerSample, format)
                 : leftRaw;
 
-            input1[i] = leftRaw * leftGain;
-            input2[i] = rightRaw * rightGain;
+            var input1 = leftRaw * leftGain;
+            var input2 = rightRaw * rightGain;
 
-            var leftOut = leftAudible && _monitoringEnabled ? input1[i] : 0f;
-            var rightOut = rightAudible && _monitoringEnabled ? input2[i] : 0f;
+            var input1Out = leftAudible && _monitoringEnabled ? input1 : 0f;
+            var input2Out = rightAudible && _monitoringEnabled ? input2 : 0f;
 
-            SampleFormatIO.WriteSample(processed, frameOffset, leftOut, format);
+            // Roteamento aplicado depois de trim/mute/solo já resolvidos (FR-006), alimentando
+            // tanto o buffer de saída quanto os meters com o mesmo par (left, right) (research.md §1).
+            var (left, right) = RoutingModeApplier.Apply(_routingMode, input1Out, input2Out);
+            routedLeft[i] = left;
+            routedRight[i] = right;
+
+            SampleFormatIO.WriteSample(processed, frameOffset, left, format);
             if (channelCount > 1)
             {
-                SampleFormatIO.WriteSample(processed, frameOffset + bytesPerSample, rightOut, format);
+                SampleFormatIO.WriteSample(processed, frameOffset + bytesPerSample, right, format);
             }
         }
 
         _outputBuffer.AddSamples(processed, 0, processed.Length);
 
-        RaiseLevels(InputChannelId.Input1, input1);
-        RaiseLevels(InputChannelId.Input2, input2);
+        RaiseLevels(InputChannelId.Input1, routedLeft);
+        RaiseLevels(InputChannelId.Input2, routedRight);
     }
 
     private void RaiseLevels(InputChannelId channel, ReadOnlySpan<float> samples)

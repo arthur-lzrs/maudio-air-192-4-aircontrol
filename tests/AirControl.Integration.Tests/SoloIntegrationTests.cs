@@ -10,7 +10,7 @@ public class SoloIntegrationTests
     public void EngagingSolo_SilencesOtherChannel_RegardlessOfItsMute()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
         engine.SetMute(InputChannelId.Input2, false);
 
         engine.SetSolo(InputChannelId.Input1, true);
@@ -23,7 +23,7 @@ public class SoloIntegrationTests
     public void ReleasingSolo_RestoresPreviousMuteState_ForBothChannels()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
         engine.SetMute(InputChannelId.Input1, true);
         engine.SetMute(InputChannelId.Input2, false);
 
@@ -41,7 +41,7 @@ public class SoloIntegrationTests
     public void SoloDoesNotAffectTrimOfEitherChannel()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
         engine.SetTrim(InputChannelId.Input1, 4.0);
         engine.SetTrim(InputChannelId.Input2, -4.0);
 

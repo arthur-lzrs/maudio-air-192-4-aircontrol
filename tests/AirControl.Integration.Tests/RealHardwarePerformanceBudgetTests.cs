@@ -43,7 +43,7 @@ public class RealHardwarePerformanceBudgetTests
     {
         try
         {
-            engine.Start(GetDefaultOutputDeviceId()!);
+            engine.Start(null, GetDefaultOutputDeviceId()!);
             return true;
         }
         catch (COMException)

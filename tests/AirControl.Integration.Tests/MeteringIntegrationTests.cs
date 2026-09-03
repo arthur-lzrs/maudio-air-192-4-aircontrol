@@ -10,7 +10,7 @@ public class MeteringIntegrationTests
     public void LevelsChanged_ReflectsIndependentLevelsPerChannel()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output-device");
+        engine.Start(null, "fake-output-device");
 
         var received = new List<ChannelLevelsChangedEventArgs>();
         engine.LevelsChanged += (_, args) => received.Add(args);

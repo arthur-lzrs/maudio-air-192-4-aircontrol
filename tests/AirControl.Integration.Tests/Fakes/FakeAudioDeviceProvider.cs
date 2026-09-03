@@ -9,8 +9,11 @@ namespace AirControl.Integration.Tests.Fakes;
 public class FakeAudioDeviceProvider : IAudioDeviceProvider
 {
     private readonly List<AudioOutputDeviceInfo> _outputDevices = new();
+    private readonly List<AudioInputDeviceInfo> _inputDevices = new();
 
     public event EventHandler<DeviceConnectionChangedEventArgs>? ConnectionChanged;
+
+    public event EventHandler? InputDevicesChanged;
 
     public bool IsAirDeviceConnected { get; private set; }
 
@@ -21,6 +24,25 @@ public class FakeAudioDeviceProvider : IAudioDeviceProvider
     }
 
     public IReadOnlyList<AudioOutputDeviceInfo> GetAvailableOutputDevices() => _outputDevices.AsReadOnly();
+
+    public void SetInputDevices(IEnumerable<AudioInputDeviceInfo> devices)
+    {
+        _inputDevices.Clear();
+        _inputDevices.AddRange(devices);
+    }
+
+    public IReadOnlyList<AudioInputDeviceInfo> GetAvailableInputDevices() => _inputDevices.AsReadOnly();
+
+    /// <summary>Simula uma mudança no conjunto de dispositivos de entrada ativos (ex.: desconexão de um dispositivo selecionado manualmente).</summary>
+    public void SimulateInputDevicesChanged(IEnumerable<AudioInputDeviceInfo>? updatedDevices = null)
+    {
+        if (updatedDevices is not null)
+        {
+            SetInputDevices(updatedDevices);
+        }
+
+        InputDevicesChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     public void SimulateConnection(bool isConnected, string? deviceId = "fake-air-192-4")
     {

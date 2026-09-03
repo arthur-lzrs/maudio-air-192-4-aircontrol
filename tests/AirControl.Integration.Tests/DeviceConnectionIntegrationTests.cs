@@ -28,7 +28,7 @@ public class DeviceConnectionIntegrationTests
         var deviceProvider = new FakeAudioDeviceProvider();
         var engine = new FakeAudioEngine();
         deviceProvider.SimulateConnection(true);
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
 
         var meterViewModel = new ChannelMeterViewModel(InputChannelId.Input1, engine, deviceProvider);
         engine.PushSamples(InputChannelId.Input1, new float[] { 0.9f });

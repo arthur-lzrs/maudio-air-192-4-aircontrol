@@ -2,7 +2,13 @@ namespace AirControl.Core;
 
 public interface IAudioEngine
 {
-    void Start(string outputDeviceId);
+    /// <summary>
+    /// null = auto-detectar o M-Audio AIR entre os dispositivos de captura ativos (mesmo
+    /// comportamento de antes desta extensão). Se <paramref name="inputDeviceId"/> não corresponder
+    /// a um dispositivo ativo, cai para a mesma auto-detecção; se nem isso resolver, lança
+    /// <see cref="InvalidOperationException"/>.
+    /// </summary>
+    void Start(string? inputDeviceId, string outputDeviceId);
     void Stop();
 
     event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
@@ -29,4 +35,19 @@ public interface IAudioEngine
     /// inesperado). Nula antes do primeiro <see cref="Start"/>.
     /// </summary>
     string? CaptureFormatDescription { get; }
+
+    /// <summary>
+    /// Modo de roteamento ativo. <see cref="SetRoutingMode"/> aplica
+    /// <see cref="RoutingModeApplier.ResolveFallback"/> contra <see cref="ActiveInputChannelCount"/>
+    /// antes de armazenar — nunca fica em um estado inválido para o dispositivo ativo (FR-005).
+    /// </summary>
+    RoutingMode RoutingMode { get; }
+
+    void SetRoutingMode(RoutingMode mode);
+
+    /// <summary>
+    /// Canais de entrada expostos pelo dispositivo de captura ativo (1 ou 2). 0 antes do primeiro
+    /// <see cref="Start"/>.
+    /// </summary>
+    int ActiveInputChannelCount { get; }
 }

@@ -16,6 +16,8 @@ public class AudioDeviceProvider : IAudioDeviceProvider, IMMNotificationClient, 
 
     public event EventHandler<DeviceConnectionChangedEventArgs>? ConnectionChanged;
 
+    public event EventHandler? InputDevicesChanged;
+
     public AudioDeviceProvider()
     {
         _enumerator = new MMDeviceEnumerator();
@@ -35,6 +37,19 @@ public class AudioDeviceProvider : IAudioDeviceProvider, IMMNotificationClient, 
                 device.ID,
                 device.FriendlyName,
                 device.ID == defaultDevice?.ID))
+            .ToList();
+    }
+
+    public IReadOnlyList<AudioInputDeviceInfo> GetAvailableInputDevices()
+    {
+        var devices = _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
+
+        return devices
+            .Select(device => new AudioInputDeviceInfo(
+                device.ID,
+                device.FriendlyName,
+                device.AudioClient.MixFormat.Channels,
+                device.FriendlyName.Contains(AirDeviceNameFragment, StringComparison.OrdinalIgnoreCase)))
             .ToList();
     }
 
@@ -64,6 +79,8 @@ public class AudioDeviceProvider : IAudioDeviceProvider, IMMNotificationClient, 
         {
             ConnectionChanged?.Invoke(this, new DeviceConnectionChangedEventArgs(_isAirDeviceConnected, _airDeviceId));
         }
+
+        InputDevicesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     void IMMNotificationClient.OnDeviceStateChanged(string deviceId, DeviceState newState) => RefreshAirDeviceState();

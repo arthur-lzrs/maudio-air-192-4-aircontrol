@@ -13,6 +13,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -25,14 +27,18 @@
                    Text="{Binding CaptureFormatDescription, StringFormat={}Captura: {0}}"
                    Visibility="{Binding CaptureFormatDescription, Converter={StaticResource NullToVisibilityConverter}}" />
 
-        <ToggleButton Grid.Row="2" Margin="0,0,0,12" Padding="6,4" HorizontalAlignment="Left"
+        <views:InputDeviceSelectorView Grid.Row="2" Margin="0,0,0,8" DataContext="{Binding InputDeviceSelector}" />
+
+        <views:RoutingModeSelectorView Grid.Row="3" Margin="0,0,0,12" DataContext="{Binding RoutingModeSelector}" />
+
+        <ToggleButton Grid.Row="4" Margin="0,0,0,12" Padding="6,4" HorizontalAlignment="Left"
                       Content="Monitoração ativa"
                       IsChecked="{Binding Monitoring.IsMonitoringEnabled, Mode=TwoWay}"
                       AutomationProperties.Name="Habilitar ou desabilitar a monitoração audível"
                       AutomationProperties.HelpText="Quando desabilitado, a saída de áudio fica em silêncio, mas os meters continuam funcionando"
                       AutomationProperties.LiveSetting="Assertive" />
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center">
             <StackPanel Margin="0,0,24,0" Width="150">
                 <views:MeterControl ChannelLabel="Input 1"
                                      PeakDb="{Binding Input1Meter.PeakDb}"

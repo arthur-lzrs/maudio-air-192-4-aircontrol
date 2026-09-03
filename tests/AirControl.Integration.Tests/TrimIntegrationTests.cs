@@ -11,7 +11,7 @@ public class TrimIntegrationTests
     public void SetTrim_ReflectsInLevelsChanged_Within100Ms()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output-device");
+        engine.Start(null, "fake-output-device");
 
         var samples = new float[] { 0.5f, -0.5f };
         engine.PushSamples(InputChannelId.Input1, samples);
@@ -41,7 +41,7 @@ public class TrimIntegrationTests
     public void SetTrim_OnlyAffectsTargetChannel()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output-device");
+        engine.Start(null, "fake-output-device");
         engine.SetTrim(InputChannelId.Input1, 12.0);
 
         Assert.Equal(12.0, engine.GetState(InputChannelId.Input1).TrimDb);

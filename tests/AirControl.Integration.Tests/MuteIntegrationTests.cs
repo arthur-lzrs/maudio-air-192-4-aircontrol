@@ -10,7 +10,7 @@ public class MuteIntegrationTests
     public void SetMute_SilencesOnlyTargetChannel()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
 
         engine.SetMute(InputChannelId.Input1, true);
 
@@ -22,7 +22,7 @@ public class MuteIntegrationTests
     public void SetMute_DoesNotAffectMeteringOfEitherChannel()
     {
         var engine = new FakeAudioEngine();
-        engine.Start("fake-output");
+        engine.Start(null, "fake-output");
         engine.SetMute(InputChannelId.Input1, true);
 
         ChannelLevelsChangedEventArgs? input1Levels = null;
