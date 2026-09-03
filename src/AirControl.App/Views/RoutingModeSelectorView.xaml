@@ -3,11 +3,23 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:AirControl.App.Converters"
              mc:Ignorable="d" d:DesignWidth="260">
+    <UserControl.Resources>
+        <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+    </UserControl.Resources>
     <StackPanel>
         <TextBlock Margin="0,0,0,4" Text="Modo de roteamento" />
         <ComboBox ItemsSource="{Binding AvailableModes}"
                   SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
+                  IsEnabled="{Binding IsDeterminable}"
                   AutomationProperties.Name="Seletor de modo de roteamento" />
+        <!-- FR-003: uma lista vazia nunca aparece sozinha — quando os canais não são determináveis,
+             a mensagem acionável ocupa o lugar do combobox desabilitado. -->
+        <TextBlock Margin="0,4,0,0" FontSize="10" Foreground="#B00020" TextWrapping="Wrap"
+                   Text="{Binding StatusMessage}"
+                   Visibility="{Binding StatusMessage, Converter={StaticResource NullToVisibilityConverter}}"
+                   AutomationProperties.Name="Estado do seletor de modo de roteamento"
+                   AutomationProperties.LiveSetting="Polite" />
     </StackPanel>
 </UserControl>

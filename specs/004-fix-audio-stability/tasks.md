@@ -72,14 +72,14 @@ indeterminable) and the persisted selection is restored (SC-001).
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Unit test `RoutingOptionsState` resolution for channel counts 0/1/2 (0 → not determinable + actionable message, never silent empty; 1 → mono; ≥2 → all modes) in `tests/AirControl.Core.Tests/RoutingOptionsTests.cs` (FR-002/FR-003, S1)
-- [ ] T008 [P] [US1] Integration test: 20 simulated startups (including `ActiveInputChannelCount == 0` transient and device-arrives-after-open) → routing selector never empty without a message, persisted selection restored, same final state every time in `tests/AirControl.Integration.Tests/StartupDeterminismIntegrationTests.cs` (SC-001, S6)
+- [X] T007 [P] [US1] Unit test `RoutingOptionsState` resolution for channel counts 0/1/2 (0 → not determinable + actionable message, never silent empty; 1 → mono; ≥2 → all modes) in `tests/AirControl.Core.Tests/RoutingOptionsTests.cs` (FR-002/FR-003, S1)
+- [X] T008 [P] [US1] Integration test: 20 simulated startups (including `ActiveInputChannelCount == 0` transient and device-arrives-after-open) → routing selector never empty without a message, persisted selection restored, same final state every time in `tests/AirControl.Integration.Tests/StartupDeterminismIntegrationTests.cs` (SC-001, S6)
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Create pure `RoutingOptionsState` (fields `AvailableModes`, `IsDeterminable`, `Message`; empty list only when `!IsDeterminable`) with resolution logic from channel count in `src/AirControl.Core/RoutingOptions.cs` (data-model §3)
-- [ ] T010 [US1] Use `RoutingOptionsState` in `src/AirControl.App/ViewModels/RoutingModeSelectorViewModel.cs` so `RefreshAvailableModes` shows an actionable message instead of an empty combobox when `ActiveInputChannelCount == 0`, and repopulates automatically when a valid device returns (FR-002/FR-003/FR-004, S1)
-- [ ] T011 [US1] Ensure the end-of-ctor device resolution in `src/AirControl.App/ViewModels/MainWindowViewModel.cs` runs after all handlers are wired and is idempotent (a second notification arriving right after produces the same final state) (research.md §5, S6, FR-005)
+- [X] T009 [P] [US1] Create pure `RoutingOptionsState` (fields `AvailableModes`, `IsDeterminable`, `Message`; empty list only when `!IsDeterminable`) with resolution logic from channel count in `src/AirControl.Core/RoutingOptions.cs` (data-model §3)
+- [X] T010 [US1] Use `RoutingOptionsState` in `src/AirControl.App/ViewModels/RoutingModeSelectorViewModel.cs` so `RefreshAvailableModes` shows an actionable message instead of an empty combobox when `ActiveInputChannelCount == 0`, and repopulates automatically when a valid device returns (FR-002/FR-003/FR-004, S1)
+- [X] T011 [US1] Ensure the end-of-ctor device resolution in `src/AirControl.App/ViewModels/MainWindowViewModel.cs` runs after all handlers are wired and is idempotent (a second notification arriving right after produces the same final state) (research.md §5, S6, FR-005)
 
 **Checkpoint**: Routing selector is never silently empty; startup is deterministic across repeats.
 

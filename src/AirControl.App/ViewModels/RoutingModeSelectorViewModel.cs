@@ -12,10 +12,21 @@ public partial class RoutingModeSelectorViewModel : ViewModelBase
     public IReadOnlyList<RoutingMode> AllModes { get; } = Enum.GetValues<RoutingMode>();
 
     [ObservableProperty]
-    private IReadOnlyList<RoutingMode> _availableModes = Enum.GetValues<RoutingMode>();
+    private IReadOnlyList<RoutingMode> _availableModes = Array.Empty<RoutingMode>();
 
     [ObservableProperty]
     private RoutingMode _selectedMode;
+
+    /// <summary>
+    /// False quando os canais do dispositivo ativo não são determináveis (<c>ActiveInputChannelCount == 0</c>):
+    /// nesse caso <see cref="AvailableModes"/> fica vazia MAS <see cref="StatusMessage"/> traz a
+    /// explicação acionável (FR-002/FR-003) — nunca um combobox vazio e silencioso.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDeterminable;
+
+    [ObservableProperty]
+    private string? _statusMessage;
 
     public RoutingModeSelectorViewModel(IAudioEngine audioEngine, ISettingsRepository settingsRepository)
     {
@@ -24,6 +35,11 @@ public partial class RoutingModeSelectorViewModel : ViewModelBase
 
         var profile = _settingsRepository.Load();
         _selectedMode = profile.RoutingMode;
+
+        // Estado inicial derivado do engine (ainda não iniciado ⇒ não determinável + mensagem), em
+        // vez de "todos os modos" otimista: assim o estado exibido é sempre honesto e o startup é
+        // determinístico independente de quando a primeira notificação chega (SC-001).
+        RefreshAvailableModes();
     }
 
     /// <summary>
@@ -34,15 +50,30 @@ public partial class RoutingModeSelectorViewModel : ViewModelBase
     public void ApplyPersistedMode()
     {
         RefreshAvailableModes();
+
+        if (!IsDeterminable)
+        {
+            // Sem canais determináveis, aplicar o modo ao engine só faria o ResolveFallback
+            // reescrever a seleção do usuário para Stereo e "perder" a preferência persistida no
+            // meio de um transiente. Preserva a seleção e espera o dispositivo válido voltar
+            // (FR-004) — quando voltar, esta mesma função repopula e aplica.
+            return;
+        }
+
         _audioEngine.SetRoutingMode(SelectedMode);
         SyncSelectedModeFromEngine();
     }
 
+    /// <summary>
+    /// Recalcula as opções a partir de <see cref="RoutingOptionsState"/> (lógica pura em
+    /// <c>AirControl.Core</c>). Nunca deixa o combobox vazio sem uma mensagem acionável (FR-003).
+    /// </summary>
     public void RefreshAvailableModes()
     {
-        AvailableModes = AllModes
-            .Where(mode => RoutingModeApplier.IsSupported(mode, _audioEngine.ActiveInputChannelCount))
-            .ToList();
+        var state = RoutingOptionsState.Resolve(_audioEngine.ActiveInputChannelCount);
+        AvailableModes = state.AvailableModes;
+        IsDeterminable = state.IsDeterminable;
+        StatusMessage = state.Message;
     }
 
     private void SyncSelectedModeFromEngine()

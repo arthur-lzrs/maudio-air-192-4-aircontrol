@@ -102,6 +102,15 @@ public partial class MainWindowViewModel : ViewModelBase
         // o AIR especificamente não esteja conectado — caso contrário uma seleção manual de um
         // dispositivo não-AIR nunca seria restaurada (FR-011), e a ausência de qualquer dispositivo
         // válido nunca surfaceria o prompt de seleção no lançamento (FR-009).
+        //
+        // ORDEM É CONTRATO (research.md §0/R1, S6): esta resolução é DELIBERADAMENTE a última
+        // instrução do construtor — depois de TODOS os handlers acima estarem fiados. O
+        // AudioDeviceProvider registra o callback COM já no próprio construtor (passo 2 do §0),
+        // então qualquer notificação que tenha chegado antes daqui foi perdida; re-resolver no fim
+        // do ctor é o que fecha essa janela. A operação é idempotente: uma segunda notificação
+        // chegando logo em seguida (ConnectionChanged/InputDevicesChanged) reexecuta exatamente o
+        // mesmo caminho e produz o mesmo estado final (FR-005, SC-001) — coberto por
+        // StartupDeterminismIntegrationTests.SecondNotificationRightAfterStartup_ProducesIdenticalState.
         OnConnectionChanged(new DeviceConnectionChangedEventArgs(true, null));
     }
 
@@ -110,6 +119,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!args.IsConnected)
         {
             _audioEngine.Stop();
+            RoutingModeSelector.RefreshAvailableModes();
             CaptureFormatDescription = null;
             return;
         }
@@ -128,6 +138,13 @@ public partial class MainWindowViewModel : ViewModelBase
                 RoutingModeSelector.ApplyPersistedMode();
                 RefreshDeviceDependentSections();
                 CaptureFormatDescription = GetCaptureStatusDescription();
+            }
+            else
+            {
+                // Sem dispositivo resolvido, o seletor de roteamento tem que refletir isso com a
+                // mensagem acionável em vez de continuar mostrando os modos da sessão anterior
+                // (FR-003) — é o que torna o estado final igual em toda abertura (SC-001).
+                RoutingModeSelector.RefreshAvailableModes();
             }
         }
         catch (Exception ex)
@@ -211,6 +228,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (InputDeviceSelector.NeedsSelection)
         {
+            RoutingModeSelector.RefreshAvailableModes();
             RefreshDeviceDependentSections();
             CaptureFormatDescription = null;
             return;
