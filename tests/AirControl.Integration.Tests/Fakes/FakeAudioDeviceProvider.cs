@@ -15,6 +15,13 @@ public class FakeAudioDeviceProvider : IAudioDeviceProvider
 
     public event EventHandler? InputDevicesChanged;
 
+    /// <summary>
+    /// Espelha o marshalling que <c>AudioDeviceProvider</c> faz na borda de <c>AirControl.Audio</c>
+    /// (research.md §4 / R2): os callbacks reais chegam em thread COM. Default imediato mantém o
+    /// comportamento síncrono dos testes existentes.
+    /// </summary>
+    public IUiDispatcher UiDispatcher { get; set; } = ImmediateUiDispatcher.Instance;
+
     public bool IsAirDeviceConnected { get; private set; }
 
     public void SetOutputDevices(IEnumerable<AudioOutputDeviceInfo> devices)
@@ -41,12 +48,13 @@ public class FakeAudioDeviceProvider : IAudioDeviceProvider
             SetInputDevices(updatedDevices);
         }
 
-        InputDevicesChanged?.Invoke(this, EventArgs.Empty);
+        UiDispatcher.Post(() => InputDevicesChanged?.Invoke(this, EventArgs.Empty));
     }
 
     public void SimulateConnection(bool isConnected, string? deviceId = "fake-air-192-4")
     {
         IsAirDeviceConnected = isConnected;
-        ConnectionChanged?.Invoke(this, new DeviceConnectionChangedEventArgs(isConnected, isConnected ? deviceId : null));
+        var args = new DeviceConnectionChangedEventArgs(isConnected, isConnected ? deviceId : null);
+        UiDispatcher.Post(() => ConnectionChanged?.Invoke(this, args));
     }
 }

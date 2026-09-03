@@ -29,6 +29,15 @@
                    Text="{Binding CaptureFormatDescription, StringFormat={}Captura: {0}}"
                    Visibility="{Binding CaptureFormatDescription, Converter={StaticResource NullToVisibilityConverter}}" />
 
+        <!-- US2/FR-007: um fluxo parado nunca é silencioso — estado transitório de recuperação ou
+             erro acionável, no mesmo padrão de mensagem das demais seções (Constitution III). -->
+        <TextBlock Grid.Row="1" Margin="0,16,0,8" FontSize="10" Foreground="#B00020" TextWrapping="Wrap"
+                   VerticalAlignment="Bottom"
+                   Text="{Binding StreamHealthMessage}"
+                   Visibility="{Binding StreamHealthMessage, Converter={StaticResource NullToVisibilityConverter}}"
+                   AutomationProperties.Name="Estado do fluxo de áudio"
+                   AutomationProperties.LiveSetting="Assertive" />
+
         <views:InputDeviceSelectorView Grid.Row="2" Margin="0,0,0,8" DataContext="{Binding InputDeviceSelector}" />
 
         <views:RoutingModeSelectorView Grid.Row="3" Margin="0,0,0,8" DataContext="{Binding RoutingModeSelector}" />

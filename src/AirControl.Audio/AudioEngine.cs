@@ -30,7 +30,21 @@ public class AudioEngine : IAudioEngine, IDisposable
     private RoutingMode _routingMode;
     private int _activeInputChannelCount;
 
+    private readonly AudioStreamHealth _health = new();
+    private System.Threading.Timer? _watchdog;
+    private long _lastDataTicks;
+    private string? _activeInputDeviceId;
+    private string? _activeOutputDeviceId;
+    private bool _isRecovering;
+
+    /// <summary>Cadência do watchdog: 1s, bem abaixo do limiar de 5s de staleness (SC-002).</summary>
+    private static readonly TimeSpan WatchdogInterval = TimeSpan.FromSeconds(1);
+
     public event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
+
+    public event EventHandler<AudioStreamHealthChangedEventArgs>? StreamHealthChanged;
+
+    public AudioStreamHealth Health => _health;
 
     /// <param name="uiDispatcher">
     /// Marshalling de <see cref="LevelsChanged"/> (levantado na thread de captura do NAudio) para a
@@ -59,6 +73,7 @@ public class AudioEngine : IAudioEngine, IDisposable
             };
 
             _output = CreateAndInitOutput(outputDevice, _outputBuffer);
+            _output.PlaybackStopped += OnPlaybackStopped;
             _output.Play();
 
             var format = _capture.WaveFormat;
@@ -70,6 +85,21 @@ public class AudioEngine : IAudioEngine, IDisposable
                 : string.Empty;
             _captureFormatDescription =
                 $"{format.Channels}ch, {format.BitsPerSample}-bit {format.Encoding}, {format.SampleRate}Hz{channelWarning}";
+
+            // Guarda os ids para a recuperação automática limitada (Stop+Start) do watchdog.
+            _activeInputDeviceId = inputDeviceId;
+            _activeOutputDeviceId = outputDeviceId;
+
+            // Semeia "último dado recebido" com o instante do Start: sem isso o primeiro tick do
+            // watchdog veria "nenhum dado desde sempre" e marcaria Stalled antes do primeiro buffer.
+            var now = DateTimeOffset.UtcNow;
+            Interlocked.Exchange(ref _lastDataTicks, now.UtcTicks);
+            if (_health.MarkDataReceived(now))
+            {
+                RaiseHealthChanged();
+            }
+
+            StartWatchdog();
         }
         catch
         {
@@ -143,6 +173,7 @@ public class AudioEngine : IAudioEngine, IDisposable
     {
         var capture = new WasapiCapture(inputDevice);
         capture.DataAvailable += OnDataAvailable;
+        capture.RecordingStopped += OnRecordingStopped;
         try
         {
             capture.StartRecording();
@@ -152,10 +183,12 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             var fallbackFormat = WaveFormat.CreateIeeeFloatWaveFormat(capture.WaveFormat.SampleRate, capture.WaveFormat.Channels);
             capture.DataAvailable -= OnDataAvailable;
+            capture.RecordingStopped -= OnRecordingStopped;
             capture.Dispose();
 
             capture = new WasapiCapture(inputDevice) { WaveFormat = fallbackFormat };
             capture.DataAvailable += OnDataAvailable;
+            capture.RecordingStopped += OnRecordingStopped;
             capture.StartRecording();
             return capture;
         }
@@ -218,6 +251,23 @@ public class AudioEngine : IAudioEngine, IDisposable
 
     public void Stop()
     {
+        StopWatchdog();
+
+        // Desassina ANTES de parar: RecordingStopped/PlaybackStopped também disparam em uma parada
+        // deliberada (Stop do usuário, pausa de reconfiguração, troca de dispositivo). Desassinar é
+        // mais determinístico do que um flag "parada intencional" — evita que uma parada esperada
+        // seja contabilizada como congelamento (falso Stalled).
+        if (_capture is not null)
+        {
+            _capture.DataAvailable -= OnDataAvailable;
+            _capture.RecordingStopped -= OnRecordingStopped;
+        }
+
+        if (_output is not null)
+        {
+            _output.PlaybackStopped -= OnPlaybackStopped;
+        }
+
         _capture?.StopRecording();
         _capture?.Dispose();
         _capture = null;
@@ -271,6 +321,11 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             return;
         }
+
+        // Regra 1 do contrato de saúde do fluxo: cada buffer atualiza "último dado recebido". Só um
+        // Interlocked aqui (nada de lock na thread de captura); a transição de estado em si é feita
+        // pelo watchdog, na thread da UI.
+        Interlocked.Exchange(ref _lastDataTicks, DateTimeOffset.UtcNow.UtcTicks);
 
         var format = _capture.WaveFormat;
         var bytesPerSample = format.BitsPerSample / 8;
@@ -356,6 +411,138 @@ public class AudioEngine : IAudioEngine, IDisposable
         }
     }
 
+    // --- Saúde do fluxo: watchdog + eventos de parada do NAudio (contrato audio-stream-health) ---
+
+    /// <summary>
+    /// Watchdog de saúde do fluxo. Roda em um <see cref="System.Threading.Timer"/> mas TODO o
+    /// trabalho é despachado para a thread da UI via <see cref="IUiDispatcher"/> — equivalente ao
+    /// <c>DispatcherTimer</c> pedido pelo contrato, sem trazer WPF para <c>AirControl.Audio</c>
+    /// (Constitution I). MUST NOT consultar o driver: só compara <c>agora - último dado recebido</c>
+    /// (FR-015b/SC-004b).
+    /// </summary>
+    private void StartWatchdog()
+    {
+        StopWatchdog();
+        _watchdog = new System.Threading.Timer(
+            _ => _uiDispatcher.Post(OnWatchdogTick),
+            null,
+            WatchdogInterval,
+            WatchdogInterval);
+    }
+
+    private void StopWatchdog()
+    {
+        _watchdog?.Dispose();
+        _watchdog = null;
+    }
+
+    /// <summary>
+    /// Único ponto que muta <see cref="_health"/> depois do Start — sempre na thread da UI. O
+    /// caminho de captura só escreve <see cref="_lastDataTicks"/> (interlocked), o que evita
+    /// qualquer lock compartilhado entre a thread de captura e a thread da UI (um lock aqui poderia
+    /// travar <c>StopRecording</c>, que espera a thread de captura sair).
+    /// </summary>
+    private void OnWatchdogTick()
+    {
+        var lastData = new DateTimeOffset(Interlocked.Read(ref _lastDataTicks), TimeSpan.Zero);
+        var changed = false;
+
+        if (_health.LastDataReceivedAt is null || lastData > _health.LastDataReceivedAt.Value)
+        {
+            changed |= _health.MarkDataReceived(lastData);
+        }
+
+        changed |= _health.EvaluateStaleness(DateTimeOffset.UtcNow);
+
+        if (changed)
+        {
+            RaiseHealthChanged();
+        }
+
+        if (_health.State == AudioStreamState.Stalled)
+        {
+            TryRecover();
+        }
+    }
+
+    private void OnRecordingStopped(object? sender, StoppedEventArgs e) =>
+        SignalStreamStopped("WasapiCapture.RecordingStopped", e.Exception);
+
+    private void OnPlaybackStopped(object? sender, StoppedEventArgs e) =>
+        SignalStreamStopped("WasapiOut.PlaybackStopped", e.Exception);
+
+    /// <summary>
+    /// Regra 3 do contrato: uma parada sinalizada pelo NAudio (com ou sem exceção) NUNCA é engolida
+    /// — vira <see cref="AudioStreamState.Stalled"/> e dispara a recuperação limitada. Marshalado
+    /// para a thread da UI porque esses eventos chegam na thread de captura/reprodução.
+    /// </summary>
+    private void SignalStreamStopped(string source, Exception? exception)
+    {
+        var reason = exception is null ? source : $"{source}: {exception.Message}";
+
+        _uiDispatcher.Post(() =>
+        {
+            if (_health.MarkStalled(DateTimeOffset.UtcNow, reason))
+            {
+                RaiseHealthChanged();
+            }
+
+            TryRecover();
+        });
+    }
+
+    /// <summary>
+    /// Recuperação automática LIMITADA (≤ 2 tentativas, backoff curto) via a política pura de
+    /// <c>AirControl.Core</c>; esgotada, cai para <see cref="AudioStreamState.Faulted"/> com
+    /// mensagem acionável — nunca um laço de reinício infinito (FR-007, regra 4 do contrato).
+    /// </summary>
+    private void TryRecover()
+    {
+        if (_isRecovering || _health.State != AudioStreamState.Stalled)
+        {
+            return;
+        }
+
+        _isRecovering = true;
+        try
+        {
+            AudioStreamRecoveryPolicy.Recover(
+                _health,
+                RestartForRecovery,
+                () => DateTimeOffset.UtcNow,
+                Thread.Sleep);
+        }
+        finally
+        {
+            _isRecovering = false;
+        }
+
+        RaiseHealthChanged();
+    }
+
+    private void RestartForRecovery()
+    {
+        if (_activeOutputDeviceId is null)
+        {
+            throw new InvalidOperationException("nenhum dispositivo de saída ativo para restabelecer o fluxo");
+        }
+
+        Start(_activeInputDeviceId, _activeOutputDeviceId);
+    }
+
+    private void RaiseHealthChanged()
+    {
+        var args = new AudioStreamHealthChangedEventArgs(_health.State, _health.FaultReason, _health.RecoveryAttempts);
+
+        if (_uiDispatcher.IsOnUiThread)
+        {
+            StreamHealthChanged?.Invoke(this, args);
+            return;
+        }
+
+        _uiDispatcher.Post(() => StreamHealthChanged?.Invoke(this, args));
+    }
+
     private void FlushPendingLevels()
     {
         ChannelLevelsChangedEventArgs?[] batch;
@@ -377,5 +564,9 @@ public class AudioEngine : IAudioEngine, IDisposable
         }
     }
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        StopWatchdog();
+        Stop();
+    }
 }

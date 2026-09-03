@@ -26,6 +26,15 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? _captureFormatDescription;
 
+    /// <summary>
+    /// Estado acionável da saúde do fluxo de áudio (US2): null enquanto
+    /// <see cref="AudioStreamState.Delivering"/>; mensagem transitória durante
+    /// <see cref="AudioStreamState.Stalled"/> (recuperação automática em curso) e mensagem de erro
+    /// acionável em <see cref="AudioStreamState.Faulted"/> (FR-007, Constitution III).
+    /// </summary>
+    [ObservableProperty]
+    private string? _streamHealthMessage;
+
     public MainWindowViewModel(
         IAudioEngine audioEngine,
         IAudioDeviceProvider deviceProvider,
@@ -94,6 +103,8 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         };
 
+        audioEngine.StreamHealthChanged += (_, args) => OnStreamHealthChanged(args);
+
         deviceProvider.ConnectionChanged += (_, args) => OnConnectionChanged(args);
         deviceProvider.InputDevicesChanged += (_, _) => OnInputDevicesChanged();
 
@@ -154,6 +165,24 @@ public partial class MainWindowViewModel : ViewModelBase
             CaptureFormatDescription = $"Falha ao iniciar monitoração: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// Traduz a saúde do fluxo em estado de UI (US2/FR-007). Um congelamento deixa de ser silencioso:
+    /// vira mensagem transitória enquanto a recuperação automática limitada tenta restabelecer o
+    /// fluxo, e mensagem de erro acionável quando as tentativas se esgotam. Voltar a
+    /// <see cref="AudioStreamState.Delivering"/> limpa o estado — o app volta ao normal sozinho.
+    /// O zeramento dos medidores é responsabilidade do próprio
+    /// <see cref="ChannelMeterViewModel"/>, que também assina <c>StreamHealthChanged</c>.
+    /// </summary>
+    private void OnStreamHealthChanged(AudioStreamHealthChangedEventArgs args) =>
+        StreamHealthMessage = args.State switch
+        {
+            AudioStreamState.Delivering => null,
+            AudioStreamState.Stalled =>
+                "O fluxo de áudio parou; tentando restabelecer a monitoração automaticamente…",
+            AudioStreamState.Faulted => args.FaultReason,
+            _ => null,
+        };
 
     /// <summary>
     /// <see cref="IAudioEngine.Start"/> agora nunca deixa uma falha (ex.: formato não suportado,

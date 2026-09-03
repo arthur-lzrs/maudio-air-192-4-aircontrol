@@ -13,8 +13,22 @@ public class FakeAudioEngine : IAudioEngine
 
     private readonly Dictionary<InputChannelId, double> _trimDb = Channels.ToDictionary(c => c, _ => 0.0);
     private readonly ChannelToggleTracker _toggles = new(Channels);
+    private readonly IUiDispatcher _uiDispatcher;
+
+    public FakeAudioEngine(IUiDispatcher? uiDispatcher = null) =>
+        _uiDispatcher = uiDispatcher ?? ImmediateUiDispatcher.Instance;
 
     public event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
+
+    public event EventHandler<AudioStreamHealthChangedEventArgs>? StreamHealthChanged;
+
+    public AudioStreamHealth Health { get; } = new();
+
+    /// <summary>Relógio injetável para exercitar o watchdog sem esperar tempo real.</summary>
+    public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.UtcNow;
+
+    /// <summary>Quando false, cada tentativa de recuperação automática falha — leva a Faulted após o teto.</summary>
+    public bool RecoveryRestartSucceeds { get; set; } = true;
 
     public bool IsStarted { get; private set; }
 
@@ -48,6 +62,7 @@ public class FakeAudioEngine : IAudioEngine
             : SimulatedInputChannelCount;
         RoutingMode = RoutingModeApplier.ResolveFallback(RoutingMode, ActiveInputChannelCount);
         CaptureFormatDescription = "2ch, 32-bit IeeeFloat, 48000Hz (fake)";
+        Health.MarkDataReceived(Clock());
     }
 
     public void Stop()
@@ -97,7 +112,8 @@ public class FakeAudioEngine : IAudioEngine
         var rmsDb = LevelMetering.CalculateRmsDb(adjusted);
         var isClipping = LevelMetering.IsClipping(peakDb);
 
-        LevelsChanged?.Invoke(this, new ChannelLevelsChangedEventArgs(channel, peakDb, rmsDb, isClipping));
+        var args = new ChannelLevelsChangedEventArgs(channel, peakDb, rmsDb, isClipping);
+        _uiDispatcher.Post(() => LevelsChanged?.Invoke(this, args));
     }
 
     /// <summary>
@@ -131,6 +147,77 @@ public class FakeAudioEngine : IAudioEngine
         var peakDb = LevelMetering.CalculatePeakDb(samples);
         var rmsDb = LevelMetering.CalculateRmsDb(samples);
         var isClipping = LevelMetering.IsClipping(peakDb);
-        LevelsChanged?.Invoke(this, new ChannelLevelsChangedEventArgs(channel, peakDb, rmsDb, isClipping));
+        var args = new ChannelLevelsChangedEventArgs(channel, peakDb, rmsDb, isClipping);
+        _uiDispatcher.Post(() => LevelsChanged?.Invoke(this, args));
+    }
+
+    // --- Saúde do fluxo (US2) — espelha a política do AudioEngine real ---------------------------
+
+    /// <summary>Simula a chegada de um buffer: atualiza "último dado recebido" e restaura Delivering.</summary>
+    public void SimulateDataReceived()
+    {
+        if (Health.MarkDataReceived(Clock()))
+        {
+            RaiseHealthChanged();
+        }
+    }
+
+    /// <summary>
+    /// Simula uma parada externa do fluxo (RecordingStopped/PlaybackStopped, suspensão, perda para
+    /// modo exclusivo) e a recuperação automática limitada que se segue.
+    /// </summary>
+    public void SimulateStreamStopped(string reason)
+    {
+        if (Health.MarkStalled(Clock(), reason))
+        {
+            RaiseHealthChanged();
+        }
+
+        RunRecovery();
+    }
+
+    /// <summary>Executa um tick do watchdog com o relógio atual (sem consultar nenhum driver).</summary>
+    public void RunWatchdogTick()
+    {
+        if (Health.EvaluateStaleness(Clock()))
+        {
+            RaiseHealthChanged();
+        }
+
+        RunRecovery();
+    }
+
+    private void RunRecovery()
+    {
+        if (Health.State != AudioStreamState.Stalled)
+        {
+            return;
+        }
+
+        var inputDeviceId = InputDeviceId;
+        var outputDeviceId = OutputDeviceId ?? "fake-output";
+
+        AudioStreamRecoveryPolicy.Recover(
+            Health,
+            () =>
+            {
+                if (!RecoveryRestartSucceeds)
+                {
+                    throw new InvalidOperationException("dispositivo indisponível (fake)");
+                }
+
+                Stop();
+                Start(inputDeviceId, outputDeviceId);
+            },
+            Clock,
+            backoff: TimeSpan.Zero);
+
+        RaiseHealthChanged();
+    }
+
+    private void RaiseHealthChanged()
+    {
+        var args = new AudioStreamHealthChangedEventArgs(Health.State, Health.FaultReason, Health.RecoveryAttempts);
+        _uiDispatcher.Post(() => StreamHealthChanged?.Invoke(this, args));
     }
 }

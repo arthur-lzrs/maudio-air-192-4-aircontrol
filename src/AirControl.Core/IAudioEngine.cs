@@ -50,4 +50,16 @@ public interface IAudioEngine
     /// <see cref="Start"/>.
     /// </summary>
     int ActiveInputChannelCount { get; }
+
+    /// <summary>
+    /// Estado de saúde atual do fluxo de áudio — <see cref="AudioStreamState.Delivering"/> antes de
+    /// qualquer problema (contracts/audio-stream-health-contract.md).
+    /// </summary>
+    AudioStreamHealth Health { get; }
+
+    /// <summary>
+    /// Disparado quando <see cref="AudioStreamHealth.State"/> muda. Entregue SEMPRE na thread da UI
+    /// (marshalling na borda de <c>AirControl.Audio</c>) — os assinantes são view-models ligados ao WPF.
+    /// </summary>
+    event EventHandler<AudioStreamHealthChangedEventArgs>? StreamHealthChanged;
 }

@@ -96,17 +96,17 @@ change, monitoring returns within 3s (SC-003).
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] Unit test `AudioStreamHealth` transitions `Delivering→Stalled→Faulted→Delivering`, pure staleness function `(now, lastData, threshold) → bool`, and recovery-attempt cap (2 → Faulted) in `tests/AirControl.Core.Tests/AudioStreamHealthTests.cs` (contract §Audio Stream Health, S2)
-- [ ] T013 [P] [US2] Integration test: simulated stall via fake → `Stalled` → bounded recovery or `Faulted` with actionable reason; `StreamHealthChanged` delivered on the UI thread in `tests/AirControl.Integration.Tests/StreamHealthIntegrationTests.cs` (SC-002/FR-007, S2)
-- [ ] T014 [P] [US2] Integration test: device/level events delivered on the UI thread through the dispatcher abstraction in `tests/AirControl.Integration.Tests/EventMarshallingIntegrationTests.cs` (R2/S4/S6)
+- [X] T012 [P] [US2] Unit test `AudioStreamHealth` transitions `Delivering→Stalled→Faulted→Delivering`, pure staleness function `(now, lastData, threshold) → bool`, and recovery-attempt cap (2 → Faulted) in `tests/AirControl.Core.Tests/AudioStreamHealthTests.cs` (contract §Audio Stream Health, S2)
+- [X] T013 [P] [US2] Integration test: simulated stall via fake → `Stalled` → bounded recovery or `Faulted` with actionable reason; `StreamHealthChanged` delivered on the UI thread in `tests/AirControl.Integration.Tests/StreamHealthIntegrationTests.cs` (SC-002/FR-007, S2)
+- [X] T014 [P] [US2] Integration test: device/level events delivered on the UI thread through the dispatcher abstraction in `tests/AirControl.Integration.Tests/EventMarshallingIntegrationTests.cs` (R2/S4/S6)
 
 ### Implementation for User Story 2
 
-- [ ] T015 [P] [US2] Create pure `AudioStreamHealth` (`State {Delivering,Stalled,Faulted}`, `LastDataReceivedAt`, `RecoveryAttempts`, `FaultReason`) with staleness/recovery policy (5s threshold, 2 attempts) in `src/AirControl.Core/AudioStreamHealth.cs` (data-model §1)
-- [ ] T016 [US2] Extend `IAudioEngine` with `AudioStreamHealth Health { get; }` and `event EventHandler<AudioStreamHealthChangedEventArgs>? StreamHealthChanged` (UI-thread delivery) in `src/AirControl.Core/IAudioEngine.cs`; add `AudioStreamHealthChangedEventArgs` in `src/AirControl.Core/Events.cs` (contract §Extensão de IAudioEngine)
-- [ ] T017 [US2] In `src/AirControl.Audio/AudioEngine.cs`: update `LastDataReceivedAt` in `OnDataAvailable`, subscribe to `WasapiCapture.RecordingStopped` and `WasapiOut.PlaybackStopped` (a stop with exception → `Stalled`, never swallowed), run a UI-thread `DispatcherTimer` watchdog (compares `now - LastDataReceivedAt`, no driver polling), attempt bounded auto-recovery (≤2 Stop+Start, ≤500ms backoff) then `Faulted`, and raise `StreamHealthChanged` (FR-006/FR-007/FR-009, contract rules 1–6)
-- [ ] T018 [US2] Orchestrate stream-health error/transient states in `src/AirControl.App/ViewModels/MainWindowViewModel.cs` — surface `Faulted` `FaultReason` as an actionable status message (reuse existing `StatusMessage` pattern), recover to normal on `Delivering` (FR-007, Constitution III)
-- [ ] T019 [US2] Ensure `src/AirControl.App/ViewModels/ChannelMeterViewModel.cs` consumes marshalled `LevelsChanged` and never holds a frozen value across a `Stalled`/`Faulted` transition (FR-006, contract counter-example)
+- [X] T015 [P] [US2] Create pure `AudioStreamHealth` (`State {Delivering,Stalled,Faulted}`, `LastDataReceivedAt`, `RecoveryAttempts`, `FaultReason`) with staleness/recovery policy (5s threshold, 2 attempts) in `src/AirControl.Core/AudioStreamHealth.cs` (data-model §1)
+- [X] T016 [US2] Extend `IAudioEngine` with `AudioStreamHealth Health { get; }` and `event EventHandler<AudioStreamHealthChangedEventArgs>? StreamHealthChanged` (UI-thread delivery) in `src/AirControl.Core/IAudioEngine.cs`; add `AudioStreamHealthChangedEventArgs` in `src/AirControl.Core/Events.cs` (contract §Extensão de IAudioEngine)
+- [X] T017 [US2] In `src/AirControl.Audio/AudioEngine.cs`: update `LastDataReceivedAt` in `OnDataAvailable`, subscribe to `WasapiCapture.RecordingStopped` and `WasapiOut.PlaybackStopped` (a stop with exception → `Stalled`, never swallowed), run a UI-thread `DispatcherTimer` watchdog (compares `now - LastDataReceivedAt`, no driver polling), attempt bounded auto-recovery (≤2 Stop+Start, ≤500ms backoff) then `Faulted`, and raise `StreamHealthChanged` (FR-006/FR-007/FR-009, contract rules 1–6)
+- [X] T018 [US2] Orchestrate stream-health error/transient states in `src/AirControl.App/ViewModels/MainWindowViewModel.cs` — surface `Faulted` `FaultReason` as an actionable status message (reuse existing `StatusMessage` pattern), recover to normal on `Delivering` (FR-007, Constitution III)
+- [X] T019 [US2] Ensure `src/AirControl.App/ViewModels/ChannelMeterViewModel.cs` consumes marshalled `LevelsChanged` and never holds a frozen value across a `Stalled`/`Faulted` transition (FR-006, contract counter-example)
 
 **Checkpoint**: Freezes become observable states with bounded recovery or an actionable error; metering never regresses (FR-010).
 
