@@ -13,6 +13,9 @@ public class FakeRecordingFormatController : IRecordingFormatController
 
     public string? ForcedTrySetFormatError { get; set; }
 
+    /// <summary>Quando definida, <see cref="TrySetFormat"/> LANÇA — simula a escrita COM falhando (S5).</summary>
+    public Exception? ForcedTrySetFormatException { get; set; }
+
     /// <summary>Quantas vezes <see cref="TrySetFormat"/> foi chamado — usado para detectar escritas indevidas fora do fluxo pré-Start.</summary>
     public int TrySetFormatCallCount { get; private set; }
 
@@ -29,6 +32,11 @@ public class FakeRecordingFormatController : IRecordingFormatController
     public bool TrySetFormat(string deviceId, RecordingFormat format, out string? error)
     {
         TrySetFormatCallCount++;
+
+        if (ForcedTrySetFormatException is not null)
+        {
+            throw ForcedTrySetFormatException;
+        }
 
         if (ForcedTrySetFormatError is not null)
         {

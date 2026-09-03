@@ -25,18 +25,27 @@
                    AutomationProperties.Name="Status de conexão do AIR 192|4"
                    AutomationProperties.LiveSetting="Polite" />
 
-        <TextBlock Grid.Row="1" Margin="0,0,0,8" FontSize="9" Foreground="Gray"
-                   Text="{Binding CaptureFormatDescription, StringFormat={}Captura: {0}}"
-                   Visibility="{Binding CaptureFormatDescription, Converter={StaticResource NullToVisibilityConverter}}" />
+        <StackPanel Grid.Row="1" Margin="0,0,0,8">
+            <TextBlock FontSize="9" Foreground="Gray"
+                       Text="{Binding CaptureFormatDescription, StringFormat={}Captura: {0}}"
+                       Visibility="{Binding CaptureFormatDescription, Converter={StaticResource NullToVisibilityConverter}}" />
 
-        <!-- US2/FR-007: um fluxo parado nunca é silencioso — estado transitório de recuperação ou
-             erro acionável, no mesmo padrão de mensagem das demais seções (Constitution III). -->
-        <TextBlock Grid.Row="1" Margin="0,16,0,8" FontSize="10" Foreground="#B00020" TextWrapping="Wrap"
-                   VerticalAlignment="Bottom"
-                   Text="{Binding StreamHealthMessage}"
-                   Visibility="{Binding StreamHealthMessage, Converter={StaticResource NullToVisibilityConverter}}"
-                   AutomationProperties.Name="Estado do fluxo de áudio"
-                   AutomationProperties.LiveSetting="Assertive" />
+            <!-- FR-015c: pausa de reconfiguração é deliberada e curta — sinalizada para nunca ser
+                 confundida com o congelamento da US2 logo abaixo. -->
+            <TextBlock Margin="0,4,0,0" FontSize="10" Foreground="#0B5FA5" TextWrapping="Wrap"
+                       Text="{Binding ReconfigurationMessage}"
+                       Visibility="{Binding ReconfigurationMessage, Converter={StaticResource NullToVisibilityConverter}}"
+                       AutomationProperties.Name="Estado da reconfiguração do dispositivo"
+                       AutomationProperties.LiveSetting="Polite" />
+
+            <!-- US2/FR-007: um fluxo parado nunca é silencioso — estado transitório de recuperação ou
+                 erro acionável, no mesmo padrão de mensagem das demais seções (Constitution III). -->
+            <TextBlock Margin="0,4,0,0" FontSize="10" Foreground="#B00020" TextWrapping="Wrap"
+                       Text="{Binding StreamHealthMessage}"
+                       Visibility="{Binding StreamHealthMessage, Converter={StaticResource NullToVisibilityConverter}}"
+                       AutomationProperties.Name="Estado do fluxo de áudio"
+                       AutomationProperties.LiveSetting="Assertive" />
+        </StackPanel>
 
         <views:InputDeviceSelectorView Grid.Row="2" Margin="0,0,0,8" DataContext="{Binding InputDeviceSelector}" />
 

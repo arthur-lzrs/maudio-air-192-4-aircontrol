@@ -97,11 +97,29 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         DriverSettings.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(DriverSettingsViewModel.SelectedSampleRate))
+            if (args.PropertyName != nameof(DriverSettingsViewModel.SelectedSampleRate))
             {
-                DriverSettings.UpdateSampleRateMismatch(RecordingFormatSelector.SelectedFormat?.SampleRate);
+                return;
             }
+
+            // FR-012/FR-013: mudou o sample rate do driver ⇒ as opções de formato do Windows são
+            // repopuladas IMEDIATAMENTE com a taxa recém-aplicada (sem nova consulta ao driver, logo
+            // sem pausa extra) e o formato atual é reconciliado se não seguir mais a taxa.
+            // Se a pausa do driver falhou, a taxa NÃO foi aplicada: reconciliar aqui só reescreveria
+            // o formato para uma taxa que o driver não assumiu — e a pausa bem-sucedida da
+            // reconciliação apagaria o erro acionável que o usuário precisa ver (FR-015d).
+            if (DriverSettings.Pause.Phase != ReconfigurationPhase.Faulted)
+            {
+                RecordingFormatSelector.RefreshFormatOptionsForDriverRate(DriverSettings.SelectedSampleRate);
+            }
+            DriverSettings.UpdateSampleRateMismatch(RecordingFormatSelector.SelectedFormat?.SampleRate);
         };
+
+        // FR-014/FR-015c/FR-015d: toda pausa de reconfiguração — venha do formato de gravação ou do
+        // sample rate do driver — mostra "Reconfigurando…" enquanto está InProgress e uma mensagem
+        // acionável se falhar. Nunca uma pausa silenciosa confundível com o congelamento da US2.
+        RecordingFormatSelector.Pause.PhaseChanged += (_, args) => OnReconfigurationPhaseChanged(args);
+        DriverSettings.Pause.PhaseChanged += (_, args) => OnReconfigurationPhaseChanged(args);
 
         audioEngine.StreamHealthChanged += (_, args) => OnStreamHealthChanged(args);
 
@@ -165,6 +183,23 @@ public partial class MainWindowViewModel : ViewModelBase
             CaptureFormatDescription = $"Falha ao iniciar monitoração: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// Estado transitório visível da pausa de reconfiguração (FR-015c) e erro acionável quando ela
+    /// falha (FR-015d). Distinto de <see cref="StreamHealthMessage"/> de propósito: uma pausa é
+    /// deliberada, curta e com fim previsto; um congelamento é involuntário e sem fim previsto.
+    /// </summary>
+    [ObservableProperty]
+    private string? _reconfigurationMessage;
+
+    private void OnReconfigurationPhaseChanged(ReconfigurationPauseChangedEventArgs args) =>
+        ReconfigurationMessage = args.Phase switch
+        {
+            ReconfigurationPhase.InProgress => "Reconfigurando…",
+            ReconfigurationPhase.Completed => null,
+            ReconfigurationPhase.Faulted => args.FaultReason,
+            _ => null,
+        };
 
     /// <summary>
     /// Traduz a saúde do fluxo em estado de UI (US2/FR-007). Um congelamento deixa de ser silencioso:

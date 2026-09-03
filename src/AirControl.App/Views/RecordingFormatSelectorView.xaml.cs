@@ -15,4 +15,11 @@ public partial class RecordingFormatSelectorView : UserControl
     {
         DataContext = viewModel;
     }
+
+    /// <summary>
+    /// Gatilho discreto <c>OpenFormatList</c> (FR-015b): a única forma de disparar a consulta em
+    /// tempo real ao sample rate do driver. Não existe caminho periódico equivalente (SC-004b).
+    /// </summary>
+    private void OnFormatListDropDownOpened(object sender, EventArgs e) =>
+        (DataContext as RecordingFormatSelectorViewModel)?.RefreshFormatOptionsFromDriverCommand.Execute(null);
 }

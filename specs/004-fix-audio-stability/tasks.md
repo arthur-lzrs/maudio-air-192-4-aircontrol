@@ -124,16 +124,16 @@ stays ≤2s, and monitoring returns (SC-004a); 30 min untouched → zero pauses 
 
 ### Tests for User Story 3
 
-- [ ] T020 [P] [US3] Unit test `ReconfigurationPause`: deadline exceeded → `Faulted`; `mutateDevice` that throws → capture still re-established (finally); only valid `Trigger` values accepted in `tests/AirControl.Core.Tests/ReconfigurationPauseTests.cs` (contract §Reconfiguration Pause, S5)
-- [ ] T021 [P] [US3] Integration test: format change and driver sample-rate change re-establish capture within the deadline (SC-004a); 30 min with no format/driver action → zero pauses (SC-004b); regression of S3/S5 in `tests/AirControl.Integration.Tests/ReconfigurationPauseIntegrationTests.cs`
-- [ ] T022 [US3] Extend `tests/AirControl.Integration.Tests/PerformanceBudgetTests.cs` with the reconfiguration-pause budget (≤2s) and post-change recovery budget (≤3s) (SC-004a/SC-003)
+- [X] T020 [P] [US3] Unit test `ReconfigurationPause`: deadline exceeded → `Faulted`; `mutateDevice` that throws → capture still re-established (finally); only valid `Trigger` values accepted in `tests/AirControl.Core.Tests/ReconfigurationPauseTests.cs` (contract §Reconfiguration Pause, S5)
+- [X] T021 [P] [US3] Integration test: format change and driver sample-rate change re-establish capture within the deadline (SC-004a); 30 min with no format/driver action → zero pauses (SC-004b); regression of S3/S5 in `tests/AirControl.Integration.Tests/ReconfigurationPauseIntegrationTests.cs`
+- [X] T022 [US3] Extend `tests/AirControl.Integration.Tests/PerformanceBudgetTests.cs` with the reconfiguration-pause budget (≤2s) and post-change recovery budget (≤3s) (SC-004a/SC-003)
 
 ### Implementation for User Story 3
 
-- [ ] T023 [P] [US3] Create pure `ReconfigurationPause` policy (`Trigger {OpenFormatList,ChangeDriverSampleRate,ChangeActiveDevice,Startup}`, `Phase {InProgress,Completed,Faulted}`, `Deadline` default 2s, `ReconfigurationResult = Completed|Faulted(reason)`) with the `RunPause(trigger, mutateDevice, deadline)` shape and guaranteed re-establish semantics in `src/AirControl.Core/ReconfigurationPause.cs` (data-model §2, contract §Forma da operação)
-- [ ] T024 [US3] Route `OnSelectedFormatChanged`'s Stop→mutate→Start through `ReconfigurationPause` (Start in `finally`) and move the real-time ASIO sample-rate query INSIDE the pause (replacing `FilterByAsioSampleRate` while capture is active) in `src/AirControl.App/ViewModels/RecordingFormatSelectorViewModel.cs` (FR-011/FR-015/FR-015a, S3/S5)
-- [ ] T025 [US3] Route `OnSelectedSampleRateChanged`'s Stop→mutate→Start through `ReconfigurationPause` (Start in `finally`), refresh recording-format options immediately, and reconcile + report the applied format when the current format no longer matches the driver rate in `src/AirControl.App/ViewModels/DriverSettingsViewModel.cs` (FR-012/FR-013, S5)
-- [ ] T026 [US3] Surface a visible "Reconfigurando…" transient state during any pause and an actionable error when a pause `Faulted` (deadline exceeded / query failed / rate indeterminable), reusing the shared status-message pattern, in `src/AirControl.App/ViewModels/MainWindowViewModel.cs` (FR-014/FR-015c/FR-015d)
+- [X] T023 [P] [US3] Create pure `ReconfigurationPause` policy (`Trigger {OpenFormatList,ChangeDriverSampleRate,ChangeActiveDevice,Startup}`, `Phase {InProgress,Completed,Faulted}`, `Deadline` default 2s, `ReconfigurationResult = Completed|Faulted(reason)`) with the `RunPause(trigger, mutateDevice, deadline)` shape and guaranteed re-establish semantics in `src/AirControl.Core/ReconfigurationPause.cs` (data-model §2, contract §Forma da operação)
+- [X] T024 [US3] Route `OnSelectedFormatChanged`'s Stop→mutate→Start through `ReconfigurationPause` (Start in `finally`) and move the real-time ASIO sample-rate query INSIDE the pause (replacing `FilterByAsioSampleRate` while capture is active) in `src/AirControl.App/ViewModels/RecordingFormatSelectorViewModel.cs` (FR-011/FR-015/FR-015a, S3/S5)
+- [X] T025 [US3] Route `OnSelectedSampleRateChanged`'s Stop→mutate→Start through `ReconfigurationPause` (Start in `finally`), refresh recording-format options immediately, and reconcile + report the applied format when the current format no longer matches the driver rate in `src/AirControl.App/ViewModels/DriverSettingsViewModel.cs` (FR-012/FR-013, S5)
+- [X] T026 [US3] Surface a visible "Reconfigurando…" transient state during any pause and an actionable error when a pause `Faulted` (deadline exceeded / query failed / rate indeterminable), reusing the shared status-message pattern, in `src/AirControl.App/ViewModels/MainWindowViewModel.cs` (FR-014/FR-015c/FR-015d)
 
 **Checkpoint**: Format options always match the driver rate; the pause is bounded, visible, and event-triggered only.
 

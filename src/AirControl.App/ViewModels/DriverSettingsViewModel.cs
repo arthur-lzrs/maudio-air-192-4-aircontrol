@@ -63,6 +63,24 @@ public partial class DriverSettingsViewModel : ViewModelBase
         _asioSampleRateController = asioSampleRateController;
         _outputDeviceId = outputDeviceId;
         _resolvePanelPath = resolvePanelPath ?? (() => CandidatePanelPaths.FirstOrDefault(File.Exists));
+
+        Pause = new ReconfigurationPause(
+            stopCapture: () => _audioEngine.Stop(),
+            startCapture: RestartCapture);
+    }
+
+    /// <summary>
+    /// A pausa de reconfiguração desta seção — exposta para que o <c>MainWindowViewModel</c> exiba o
+    /// estado transitório "Reconfigurando…" (FR-015c) e o erro de uma pausa que falhou (FR-015d).
+    /// </summary>
+    public ReconfigurationPause Pause { get; }
+
+    private void RestartCapture()
+    {
+        if (_deviceId is not null)
+        {
+            _audioEngine.Start(_deviceId, _outputDeviceId);
+        }
     }
 
     /// <summary>Deve ser chamado sempre que o dispositivo de entrada ativo muda, mesma regra de visibilidade de <see cref="RecordingFormatSelectorViewModel"/>.</summary>
@@ -138,19 +156,25 @@ public partial class DriverSettingsViewModel : ViewModelBase
             return;
         }
 
-        _audioEngine.Stop();
+        string? applyError = null;
 
-        if (_asioSampleRateController.TrySetSampleRate(value.Value, out var error))
+        // Stop→mutar→Start dentro da pausa de reconfiguração: o Start de restauração roda em
+        // finally (corrige S5, em que um handshake que lançasse deixava a engine parada), com teto
+        // de 2s e estado transitório visível (FR-015a/c/d).
+        var result = Pause.RunPause(ReconfigurationTrigger.ChangeDriverSampleRate, () =>
         {
-            StatusMessage = null;
-        }
-        else
-        {
-            StatusMessage = $"Falha ao aplicar sample rate no driver: {error}";
-            SetSelectedSampleRateWithoutApplying(_asioSampleRateController.GetCurrentSampleRate());
-        }
+            if (!_asioSampleRateController.TrySetSampleRate(value.Value, out var error))
+            {
+                applyError = error;
+                SetSelectedSampleRateWithoutApplying(_asioSampleRateController.GetCurrentSampleRate());
+            }
+        });
 
-        _audioEngine.Start(_deviceId, _outputDeviceId);
+        StatusMessage = !result.IsCompleted
+            ? result.FaultReason
+            : applyError is not null
+                ? $"Falha ao aplicar sample rate no driver: {applyError}"
+                : null;
     }
 
     [RelayCommand]

@@ -10,16 +10,35 @@ public class FakeAsioSampleRateController : IAsioSampleRateController
 
     public string? ForcedTrySetSampleRateError { get; set; }
 
+    /// <summary>Quando definida, <see cref="TrySetSampleRate"/> LANÇA — simula o handshake ASIO falhando (S5).</summary>
+    public Exception? ForcedTrySetSampleRateException { get; set; }
+
+    /// <summary>Observador chamado a cada consulta em tempo real — usado para verificar que a captura está parada (S3).</summary>
+    public Action? OnGetCurrentSampleRate { get; set; }
+
     public void SetCurrentSampleRate(int? sampleRate) => _currentSampleRate = sampleRate;
 
     public void SetSupportedSampleRates(IReadOnlyList<int> sampleRates) => _supportedSampleRates = sampleRates;
 
-    public int? GetCurrentSampleRate() => _currentSampleRate;
+    /// <summary>Quantas consultas em tempo real ao driver aconteceram — SC-004b/S3 dependem de contar isso.</summary>
+    public int GetCurrentSampleRateCallCount { get; private set; }
+
+    public int? GetCurrentSampleRate()
+    {
+        GetCurrentSampleRateCallCount++;
+        OnGetCurrentSampleRate?.Invoke();
+        return _currentSampleRate;
+    }
 
     public IReadOnlyList<int> GetSupportedSampleRates() => _supportedSampleRates;
 
     public bool TrySetSampleRate(int sampleRate, out string? error)
     {
+        if (ForcedTrySetSampleRateException is not null)
+        {
+            throw ForcedTrySetSampleRateException;
+        }
+
         if (ForcedTrySetSampleRateError is not null)
         {
             error = ForcedTrySetSampleRateError;

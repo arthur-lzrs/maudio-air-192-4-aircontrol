@@ -152,19 +152,21 @@ public class RecordingFormatIntegrationTests
     }
 
     /// <summary>
-    /// SyncDisplayOnly roda DEPOIS do Start, então uma consulta ao ASIO ali é segura — restringe
-    /// o dropdown às combinações que já compartilham o sample rate do ASIO, evitando oferecer
-    /// opções que recriariam a dessincronia ASIO/Windows ao serem aplicadas.
+    /// REVISADO na feature 004 (S3/R3, FR-015a): SyncDisplayOnly roda com a captura ATIVA, então a
+    /// consulta ao ASIO que existia aqui (<c>FilterByAsioSampleRate</c>) perturbava a negociação
+    /// WASAPI e zerava os canais. A restrição do dropdown pela taxa do driver continua existindo,
+    /// mas passou para <c>RefreshFormatOptionsFromDriver</c>, dentro de uma pausa de reconfiguração.
     /// </summary>
     [Fact]
-    public void SyncDisplayOnly_LimitsAvailableFormats_ToCurrentAsioSampleRate()
+    public void SyncDisplayOnly_NeverQueriesTheAsioDriverWithCaptureActive()
     {
         var controller = new FakeRecordingFormatController();
-        controller.SetSupportedFormats(AirDevice.Id, new[]
+        var supported = new[]
         {
             new RecordingFormat(44100, 16), new RecordingFormat(44100, 24),
             new RecordingFormat(48000, 16), new RecordingFormat(48000, 24), RecordingFormat.Default,
-        });
+        };
+        controller.SetSupportedFormats(AirDevice.Id, supported);
         controller.SetCurrentFormat(AirDevice.Id, new RecordingFormat(44100, 16));
         var repository = new FakeRecordingFormatRepository();
         var asioController = new FakeAsioSampleRateController();
@@ -173,7 +175,8 @@ public class RecordingFormatIntegrationTests
 
         viewModel.SyncDisplayOnly(AirDevice);
 
-        Assert.Equal(new[] { new RecordingFormat(44100, 16), new RecordingFormat(44100, 24) }, viewModel.AvailableFormats);
+        Assert.Equal(0, asioController.GetCurrentSampleRateCallCount);
+        Assert.Equal(supported, viewModel.AvailableFormats);
     }
 
     /// <summary>Sem leitura de ASIO disponível, a lista completa (sem filtro) continua sendo oferecida.</summary>

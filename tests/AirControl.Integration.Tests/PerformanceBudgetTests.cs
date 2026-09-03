@@ -133,4 +133,79 @@ public class PerformanceBudgetTests
         Assert.True(engine.IsStarted);
         Assert.True(stopwatch.ElapsedMilliseconds < ConnectionDetectionBudgetMs);
     }
+
+    /// <summary>
+    /// SC-004a (feature 004): uma pausa de reconfiguração vai do início ao restabelecimento da
+    /// captura em ≤ 2s. Mede o caminho completo Stop→mutar→Start da troca de formato.
+    /// </summary>
+    [Fact]
+    public void ReconfigurationPause_FormatChange_IsWithinPauseBudget()
+    {
+        var engine = new FakeAudioEngine();
+        engine.Start("air-id", "fake-output");
+
+        var controller = new FakeRecordingFormatController();
+        controller.SetSupportedFormats("air-id", new[] { new RecordingFormat(44100, 16), RecordingFormat.Default });
+        var viewModel = new RecordingFormatSelectorViewModel(
+            controller, new FakeRecordingFormatRepository(), engine, new FakeAsioSampleRateController(), "fake-output");
+        viewModel.ResolveForDevice(new AudioInputDeviceInfo("air-id", "M-Audio AIR 192|4", 2, IsAirDevice: true));
+
+        var stopwatch = Stopwatch.StartNew();
+        viewModel.SelectedFormat = new RecordingFormat(44100, 16);
+        stopwatch.Stop();
+
+        Assert.Equal(ReconfigurationPhase.Completed, viewModel.Pause.Phase);
+        Assert.True(engine.IsStarted);
+        Assert.True(stopwatch.Elapsed < ReconfigurationPause.DefaultDeadline);
+    }
+
+    /// <summary>SC-004a: o mesmo teto de 2s vale para a pausa da troca de sample rate do driver.</summary>
+    [Fact]
+    public void ReconfigurationPause_DriverSampleRateChange_IsWithinPauseBudget()
+    {
+        var engine = new FakeAudioEngine();
+        engine.Start("air-id", "fake-output");
+
+        var asioController = new FakeAsioSampleRateController();
+        asioController.SetSupportedSampleRates(new[] { 44100, 48000 });
+        asioController.SetCurrentSampleRate(48000);
+        var viewModel = new DriverSettingsViewModel(engine, asioController, "fake-output");
+        viewModel.UpdateForDevice(new AudioInputDeviceInfo("air-id", "M-Audio AIR 192|4", 2, IsAirDevice: true));
+
+        var stopwatch = Stopwatch.StartNew();
+        viewModel.SelectedSampleRate = 44100;
+        stopwatch.Stop();
+
+        Assert.Equal(ReconfigurationPhase.Completed, viewModel.Pause.Phase);
+        Assert.True(engine.IsStarted);
+        Assert.True(stopwatch.Elapsed < ReconfigurationPause.DefaultDeadline);
+    }
+
+    /// <summary>
+    /// SC-003: depois de qualquer alteração de configuração do usuário, a monitoração volta a
+    /// operar (níveis chegando de novo) dentro do mesmo teto de 3s já usado para reconexão.
+    /// </summary>
+    [Fact]
+    public void PostChangeRecovery_ToLevelsChanged_IsWithinConnectionBudget()
+    {
+        var engine = new FakeAudioEngine();
+        engine.Start("air-id", "fake-output");
+
+        var asioController = new FakeAsioSampleRateController();
+        asioController.SetSupportedSampleRates(new[] { 44100, 48000 });
+        asioController.SetCurrentSampleRate(48000);
+        var viewModel = new DriverSettingsViewModel(engine, asioController, "fake-output");
+        viewModel.UpdateForDevice(new AudioInputDeviceInfo("air-id", "M-Audio AIR 192|4", 2, IsAirDevice: true));
+
+        var levelsReceived = 0;
+        engine.LevelsChanged += (_, _) => levelsReceived++;
+
+        var stopwatch = Stopwatch.StartNew();
+        viewModel.SelectedSampleRate = 44100;
+        engine.PushRoutedSamples(new float[] { 0.4f }, new float[] { 0.4f });
+        stopwatch.Stop();
+
+        Assert.True(levelsReceived > 0);
+        Assert.True(stopwatch.ElapsedMilliseconds < ConnectionDetectionBudgetMs);
+    }
 }

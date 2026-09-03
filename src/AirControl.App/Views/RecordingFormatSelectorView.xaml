@@ -11,8 +11,11 @@
     </UserControl.Resources>
     <StackPanel Visibility="{Binding IsAirDeviceActive, Converter={StaticResource BooleanToVisibilityConverter}}">
         <TextBlock Margin="0,0,0,4" Text="Formato de gravação (Windows)" />
+        <!-- FR-011/FR-015: abrir a lista é o gatilho discreto que consulta o sample rate do driver
+             em tempo real DENTRO de uma pausa de reconfiguração (nunca com a captura ativa). -->
         <ComboBox ItemsSource="{Binding AvailableFormats}"
                   SelectedItem="{Binding SelectedFormat, Mode=TwoWay}"
+                  DropDownOpened="OnFormatListDropDownOpened"
                   AutomationProperties.Name="Seletor de formato de gravação" />
         <TextBlock Margin="0,4,0,0" FontSize="10" Foreground="Red" TextWrapping="Wrap"
                    Text="{Binding StatusMessage}"
