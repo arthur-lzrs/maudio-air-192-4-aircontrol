@@ -162,14 +162,42 @@ public class AudioEngine : IAudioEngine, IDisposable
         return enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
     }
 
+    /// <summary>Tentativas de reabrir a captura quando o Windows ainda não liberou a sessão de
+    /// áudio da execução anterior (achado na validação manual de campo/V1 — 18/20 aberturas
+    /// consecutivas do app falhavam com AUDCLNT_E_UNSUPPORTED_FORMAT no AIR 192|4; ver research.md
+    /// §1 S7). Bounded: nunca dispara indefinidamente.</summary>
+    private const int MaxUnsupportedFormatRetries = 3;
+
+    private static readonly TimeSpan UnsupportedFormatRetryDelay = TimeSpan.FromMilliseconds(150);
+
     /// <summary>
     /// Algumas interfaces reportam o "mix format" compartilhado como uma struct
     /// WAVEFORMATEXTENSIBLE que o próprio driver rejeita ao inicializar o AudioClient
     /// (AUDCLNT_E_UNSUPPORTED_FORMAT), mesmo aceitando o formato IEEE float "plano" equivalente
     /// (mesmos canais/sample rate). Se a tentativa padrão falhar com esse erro, tenta de novo
     /// forçando um WaveFormat IEEE float simples com os mesmos canais/sample rate.
+    ///
+    /// Se AMBAS as variações de formato falharem com o mesmo erro, a causa provável não é o
+    /// formato em si, mas o driver do AIR 192|4 ainda não ter liberado a sessão de áudio da
+    /// instância anterior do app (research.md §1 S7) — nesse caso, espera um pouco e repete o par
+    /// de tentativas, até <see cref="MaxUnsupportedFormatRetries"/> vezes, antes de desistir.
     /// </summary>
     private WasapiCapture CreateAndStartCapture(MMDevice inputDevice)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return TryStartCapture(inputDevice);
+            }
+            catch (COMException ex) when (IsUnsupportedFormat(ex) && attempt < MaxUnsupportedFormatRetries)
+            {
+                Thread.Sleep(UnsupportedFormatRetryDelay);
+            }
+        }
+    }
+
+    private WasapiCapture TryStartCapture(MMDevice inputDevice)
     {
         var capture = new WasapiCapture(inputDevice);
         capture.DataAvailable += OnDataAvailable;
