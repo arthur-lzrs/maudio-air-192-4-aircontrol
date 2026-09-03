@@ -11,6 +11,19 @@ técnica; as seções de investigação (§0–§1) rastreiam sintoma → causa-
 
 ## §0 — Sequência de inicialização atual (FR-016)
 
+> **Verificação T002 (2026-09-03)** — a ordem abaixo foi reconferida linha a linha contra
+> `src/AirControl.App/App.xaml.cs` (`OnStartup`) e
+> `src/AirControl.App/ViewModels/MainWindowViewModel.cs` (ctor + `OnConnectionChanged` +
+> `RefreshDeviceDependentSections`). **Sem drift**: os 6 passos e os 3 pontos de corrida (R1/R2/R3)
+> descrevem exatamente o código executado hoje. Detalhes confirmados: (a) o
+> `RegisterEndpointNotificationCallback` acontece no ctor de `AudioDeviceProvider`, chamado no
+> passo 2, muito antes de `MainWindowViewModel` fiar `ConnectionChanged`/`InputDevicesChanged`
+> (linhas 97–98 do ctor) — R1/S6; (b) `AudioEngine.OnDataAvailable` levanta `LevelsChanged`
+> diretamente na thread de captura do NAudio e `AudioDeviceProvider.RefreshAirDeviceState` levanta
+> `ConnectionChanged`/`InputDevicesChanged` na thread COM, ambos sem marshalling — R2; (c) a última
+> instrução do ctor é `OnConnectionChanged(new DeviceConnectionChangedEventArgs(true, null))`,
+> síncrona, passo 5/6.
+
 Ordem observada por leitura de `App.OnStartup` → `MainWindowViewModel` (ctor) → resolução de
 dispositivo. Cada passo listado com sua pré-condição e comportamento em caso de falha.
 

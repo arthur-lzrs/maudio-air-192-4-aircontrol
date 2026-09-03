@@ -13,6 +13,11 @@ public class AudioEngine : IAudioEngine, IDisposable
 
     private readonly Dictionary<InputChannelId, double> _trimDb = Channels.ToDictionary(c => c, _ => 0.0);
     private readonly ChannelToggleTracker _toggles = new(Channels);
+    private readonly IUiDispatcher _uiDispatcher;
+
+    private readonly object _pendingLevelsLock = new();
+    private readonly Dictionary<InputChannelId, ChannelLevelsChangedEventArgs> _pendingLevels = new();
+    private bool _levelsDispatchScheduled;
 
     private static bool _mediaFoundationStarted;
 
@@ -26,6 +31,14 @@ public class AudioEngine : IAudioEngine, IDisposable
     private int _activeInputChannelCount;
 
     public event EventHandler<ChannelLevelsChangedEventArgs>? LevelsChanged;
+
+    /// <param name="uiDispatcher">
+    /// Marshalling de <see cref="LevelsChanged"/> (levantado na thread de captura do NAudio) para a
+    /// thread da UI — research.md §4 / R2. Quando null, cai para <see cref="ImmediateUiDispatcher"/>,
+    /// mantendo o comportamento anterior em cenários sem UI (testes, diagnóstico).
+    /// </param>
+    public AudioEngine(IUiDispatcher? uiDispatcher = null) =>
+        _uiDispatcher = uiDispatcher ?? ImmediateUiDispatcher.Instance;
 
     public void Start(string? inputDeviceId, string outputDeviceId)
     {
@@ -309,12 +322,59 @@ public class AudioEngine : IAudioEngine, IDisposable
         RaiseLevels(InputChannelId.Input2, input2Samples);
     }
 
+    /// <summary>
+    /// Calcula peak/RMS (mesma fonte de dados pré-gate/pré-roteamento da feature 003 — FR-010/FR-021,
+    /// intocada) e entrega <see cref="LevelsChanged"/> SEMPRE na thread da UI. Como
+    /// <c>DataAvailable</c> dispara dezenas de vezes por segundo, os níveis são **coalescidos**: só
+    /// há um despacho pendente por vez e ele carrega o último valor de cada canal, em vez de
+    /// inundar a fila do dispatcher (research.md §4 / R2).
+    /// </summary>
     private void RaiseLevels(InputChannelId channel, ReadOnlySpan<float> samples)
     {
         var peakDb = LevelMetering.CalculatePeakDb(samples);
         var rmsDb = LevelMetering.CalculateRmsDb(samples);
         var isClipping = LevelMetering.IsClipping(peakDb);
-        LevelsChanged?.Invoke(this, new ChannelLevelsChangedEventArgs(channel, peakDb, rmsDb, isClipping));
+        var args = new ChannelLevelsChangedEventArgs(channel, peakDb, rmsDb, isClipping);
+
+        if (_uiDispatcher.IsOnUiThread)
+        {
+            LevelsChanged?.Invoke(this, args);
+            return;
+        }
+
+        bool scheduleDispatch;
+        lock (_pendingLevelsLock)
+        {
+            _pendingLevels[channel] = args;
+            scheduleDispatch = !_levelsDispatchScheduled;
+            _levelsDispatchScheduled = true;
+        }
+
+        if (scheduleDispatch)
+        {
+            _uiDispatcher.Post(FlushPendingLevels);
+        }
+    }
+
+    private void FlushPendingLevels()
+    {
+        ChannelLevelsChangedEventArgs?[] batch;
+        lock (_pendingLevelsLock)
+        {
+            batch = Channels
+                .Select(channel => _pendingLevels.TryGetValue(channel, out var args) ? args : null)
+                .ToArray();
+            _pendingLevels.Clear();
+            _levelsDispatchScheduled = false;
+        }
+
+        foreach (var args in batch)
+        {
+            if (args is not null)
+            {
+                LevelsChanged?.Invoke(this, args);
+            }
+        }
     }
 
     public void Dispose() => Stop();

@@ -33,9 +33,15 @@ public partial class App : Application
             return;
         }
 
+        // Ponto único de marshalling para a thread da UI (research.md §4 / R2). Criado ANTES do
+        // provedor de dispositivos, que registra o callback COM já no próprio construtor — sem o
+        // dispatcher em mãos nesse momento, a primeira notificação de dispositivo voltaria a
+        // cruzar a thread sem marshalling.
+        var uiDispatcher = new WpfUiDispatcher(Dispatcher);
+
         var settingsRepository = new SettingsRepository();
-        _deviceProvider = new AudioDeviceProvider();
-        _audioEngine = new AudioEngine();
+        _deviceProvider = new AudioDeviceProvider(uiDispatcher);
+        _audioEngine = new AudioEngine(uiDispatcher);
 
         var profile = settingsRepository.Load();
         if (profile.OutputDeviceId is null)

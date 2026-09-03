@@ -10,6 +10,7 @@ public class AudioDeviceProvider : IAudioDeviceProvider, IMMNotificationClient, 
     private const string AirDeviceNameFragment = "AIR 192";
 
     private readonly MMDeviceEnumerator _enumerator;
+    private readonly IUiDispatcher _uiDispatcher;
     private bool _isAirDeviceConnected;
     private string? _airDeviceId;
     private bool _disposed;
@@ -18,8 +19,14 @@ public class AudioDeviceProvider : IAudioDeviceProvider, IMMNotificationClient, 
 
     public event EventHandler? InputDevicesChanged;
 
-    public AudioDeviceProvider()
+    /// <param name="uiDispatcher">
+    /// Marshalling dos callbacks <see cref="IMMNotificationClient"/> para a thread da UI
+    /// (research.md §4 / R2). Quando null, cai para <see cref="ImmediateUiDispatcher"/> — mantém o
+    /// comportamento anterior em cenários sem UI (testes, diagnóstico).
+    /// </param>
+    public AudioDeviceProvider(IUiDispatcher? uiDispatcher = null)
     {
+        _uiDispatcher = uiDispatcher ?? ImmediateUiDispatcher.Instance;
         _enumerator = new MMDeviceEnumerator();
         _enumerator.RegisterEndpointNotificationCallback(this);
         RefreshAirDeviceState();
@@ -75,12 +82,20 @@ public class AudioDeviceProvider : IAudioDeviceProvider, IMMNotificationClient, 
         _isAirDeviceConnected = airDevice is not null;
         _airDeviceId = airDevice?.ID;
 
-        if (wasConnected != _isAirDeviceConnected)
+        // Os callbacks IMMNotificationClient chegam em uma thread COM; os assinantes destes eventos
+        // são view-models que escrevem [ObservableProperty] ligadas ao WPF. Marshalar aqui (na borda
+        // de AirControl.Audio) elimina a corrida cross-thread em um lugar só, em vez de exigir
+        // Dispatcher.Invoke espalhado em cada handler (research.md §4 / R2).
+        var isConnected = _isAirDeviceConnected;
+        var deviceId = _airDeviceId;
+
+        if (wasConnected != isConnected)
         {
-            ConnectionChanged?.Invoke(this, new DeviceConnectionChangedEventArgs(_isAirDeviceConnected, _airDeviceId));
+            _uiDispatcher.Post(() =>
+                ConnectionChanged?.Invoke(this, new DeviceConnectionChangedEventArgs(isConnected, deviceId)));
         }
 
-        InputDevicesChanged?.Invoke(this, EventArgs.Empty);
+        _uiDispatcher.Post(() => InputDevicesChanged?.Invoke(this, EventArgs.Empty));
     }
 
     void IMMNotificationClient.OnDeviceStateChanged(string deviceId, DeviceState newState) => RefreshAirDeviceState();

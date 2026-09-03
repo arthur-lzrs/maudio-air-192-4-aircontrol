@@ -38,8 +38,8 @@ Three-assembly desktop app (unchanged from features 001/002/003):
 
 **Purpose**: Establish the baseline needed before any stability work begins.
 
-- [ ] T001 Confirm baseline is green: run `dotnet build AirControl.sln` then `dotnet test AirControl.sln` from repo root and record the current pass count (this is the FR-021/SC-007 regression baseline that must not decrease)
-- [ ] T002 [P] Capture the current initialization order as executed today by reading `src/AirControl.App/App.xaml.cs` (`OnStartup`) and `src/AirControl.App/ViewModels/MainWindowViewModel.cs` (ctor + `OnConnectionChanged`/`RefreshDeviceDependentSections`), verifying it matches research.md §0 steps 1–6; note any drift as a comment block at the top of research.md §0
+- [X] T001 Confirm baseline is green: run `dotnet build AirControl.sln` then `dotnet test AirControl.sln` from repo root and record the current pass count (this is the FR-021/SC-007 regression baseline that must not decrease)
+- [X] T002 [P] Capture the current initialization order as executed today by reading `src/AirControl.App/App.xaml.cs` (`OnStartup`) and `src/AirControl.App/ViewModels/MainWindowViewModel.cs` (ctor + `OnConnectionChanged`/`RefreshDeviceDependentSections`), verifying it matches research.md §0 steps 1–6; note any drift as a comment block at the top of research.md §0
 
 ---
 
@@ -51,10 +51,10 @@ fixes can be relied upon.
 
 **⚠️ CRITICAL**: No user story fix is trustworthy until marshalling is in place.
 
-- [ ] T003 Add an injectable UI-thread dispatch abstraction (e.g. `IUiDispatcher` wrapping a `SynchronizationContext`/`Dispatcher`) in `src/AirControl.Core/` so events crossing into the UI can be marshalled and tests can assert delivery thread without WPF
-- [ ] T004 [P] Implement the WPF-backed dispatcher (wraps `Application.Current.Dispatcher`) in `src/AirControl.App/` and wire it through DI/app composition in `src/AirControl.App/App.xaml.cs`
-- [ ] T005 Marshal `IMMNotificationClient` callbacks to the UI dispatcher before raising `ConnectionChanged`/`InputDevicesChanged` in `src/AirControl.Audio/AudioDeviceProvider.cs` (research.md §4 / R2)
-- [ ] T006 Marshal (and coalesce) `LevelsChanged` so subscribers always receive it on the UI thread in `src/AirControl.Audio/AudioEngine.cs` (research.md §4 / R2)
+- [X] T003 Add an injectable UI-thread dispatch abstraction (e.g. `IUiDispatcher` wrapping a `SynchronizationContext`/`Dispatcher`) in `src/AirControl.Core/` so events crossing into the UI can be marshalled and tests can assert delivery thread without WPF
+- [X] T004 [P] Implement the WPF-backed dispatcher (wraps `Application.Current.Dispatcher`) in `src/AirControl.App/` and wire it through DI/app composition in `src/AirControl.App/App.xaml.cs`
+- [X] T005 Marshal `IMMNotificationClient` callbacks to the UI dispatcher before raising `ConnectionChanged`/`InputDevicesChanged` in `src/AirControl.Audio/AudioDeviceProvider.cs` (research.md §4 / R2)
+- [X] T006 Marshal (and coalesce) `LevelsChanged` so subscribers always receive it on the UI thread in `src/AirControl.Audio/AudioEngine.cs` (research.md §4 / R2)
 
 **Checkpoint**: Device and level events are guaranteed on the UI thread — user story fixes can now build on a race-free foundation.
 
