@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using AirControl.App.ViewModels;
 using AirControl.Core;
 using AirControl.Integration.Tests.Fakes;
 using Xunit;
@@ -104,6 +105,32 @@ public class PerformanceBudgetTests
 
         Assert.NotNull(received);
         Assert.True(received!.IsConnected);
+        Assert.True(stopwatch.ElapsedMilliseconds < ConnectionDetectionBudgetMs);
+    }
+
+    /// <summary>
+    /// Uma troca de formato de gravação exige parar/reiniciar a captura (FR-010) — reaproveita o
+    /// mesmo orçamento de 3s já usado para reconexão de dispositivo como teto para monitoramento/
+    /// metering voltarem a funcionar (SC-005).
+    /// </summary>
+    [Fact]
+    public void RecordingFormatChange_EngineRestartIsWithinConnectionBudget()
+    {
+        var engine = new FakeAudioEngine();
+        engine.Start("air-id", "fake-output");
+
+        var controller = new FakeRecordingFormatController();
+        var supported = new[] { new RecordingFormat(44100, 16), RecordingFormat.Default };
+        controller.SetSupportedFormats("air-id", supported);
+        var repository = new FakeRecordingFormatRepository();
+        var viewModel = new RecordingFormatSelectorViewModel(controller, repository, engine, new FakeAsioSampleRateController(), "fake-output");
+        viewModel.ResolveForDevice(new AudioInputDeviceInfo("air-id", "M-Audio AIR 192|4", 2, IsAirDevice: true));
+
+        var stopwatch = Stopwatch.StartNew();
+        viewModel.SelectedFormat = new RecordingFormat(44100, 16);
+        stopwatch.Stop();
+
+        Assert.True(engine.IsStarted);
         Assert.True(stopwatch.ElapsedMilliseconds < ConnectionDetectionBudgetMs);
     }
 }

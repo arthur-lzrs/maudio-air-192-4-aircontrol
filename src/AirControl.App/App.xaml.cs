@@ -50,7 +50,16 @@ public partial class App : Application
             }
         }
 
-        var mainWindowViewModel = new MainWindowViewModel(_audioEngine, _deviceProvider, settingsRepository);
+        var recordingFormatController = new WindowsRecordingFormatController();
+        var recordingFormatRepository = new RecordingFormatRepository();
+        var asioSampleRateController = new AsioSampleRateController();
+        var mainWindowViewModel = new MainWindowViewModel(
+            _audioEngine,
+            _deviceProvider,
+            settingsRepository,
+            recordingFormatController,
+            recordingFormatRepository,
+            asioSampleRateController);
         var mainWindow = new MainWindow(mainWindowViewModel);
         MainWindow = mainWindow;
         mainWindow.Show();

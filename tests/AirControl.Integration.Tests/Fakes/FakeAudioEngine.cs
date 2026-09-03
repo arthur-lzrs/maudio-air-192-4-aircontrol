@@ -30,8 +30,16 @@ public class FakeAudioEngine : IAudioEngine
     /// <summary>Registra a contagem de canais que <see cref="Start"/> deve simular para um dispositivo específico.</summary>
     public void SetChannelCountForDevice(string deviceId, int channelCount) => _channelCountByDeviceId[deviceId] = channelCount;
 
+    /// <summary>Quando definida, <see cref="Start"/> lança essa exceção em vez de iniciar — simula falhas reais (ex.: formato não suportado, 0x88890008).</summary>
+    public Exception? ForcedStartFailure { get; set; }
+
     public void Start(string? inputDeviceId, string outputDeviceId)
     {
+        if (ForcedStartFailure is not null)
+        {
+            throw ForcedStartFailure;
+        }
+
         InputDeviceId = inputDeviceId;
         OutputDeviceId = outputDeviceId;
         IsStarted = true;
@@ -93,29 +101,29 @@ public class FakeAudioEngine : IAudioEngine
     }
 
     /// <summary>
-    /// Simula uma amostra por par (Input1, Input2) roteada pelo <see cref="RoutingMode"/> ativo,
-    /// aplicando trim antes do roteamento (FR-006) e disparando LevelsChanged para ambos os canais
-    /// com os valores já roteados (research.md §1).
+    /// Simula um par (Input1, Input2) capturado, aplicando trim (FR-006) antes de disparar
+    /// LevelsChanged. Os meters usam o sinal pré-gate/pré-roteamento — nunca zerado por mute,
+    /// solo ou monitoramento desativado (research.md §1) — mesmo contrato de
+    /// <see cref="AirControl.Audio.AudioEngine.OnDataAvailable"/>. O nome do método é mantido por
+    /// compatibilidade com os testes existentes; "Routed" refere-se apenas ao caminho de saída
+    /// audível, que este fake não expõe diretamente.
     /// </summary>
     public void PushRoutedSamples(ReadOnlySpan<float> input1Raw, ReadOnlySpan<float> input2Raw)
     {
         var gain1 = TrimCalculator.ToLinearGain(_trimDb[InputChannelId.Input1]);
         var gain2 = TrimCalculator.ToLinearGain(_trimDb[InputChannelId.Input2]);
-        var leftAudible = _toggles.IsEffectivelyAudible(InputChannelId.Input1);
-        var rightAudible = _toggles.IsEffectivelyAudible(InputChannelId.Input2);
 
-        var left = new float[input1Raw.Length];
-        var right = new float[input2Raw.Length];
+        var input1 = new float[input1Raw.Length];
+        var input2 = new float[input2Raw.Length];
 
         for (var i = 0; i < input1Raw.Length; i++)
         {
-            var input1 = leftAudible ? input1Raw[i] * gain1 : 0f;
-            var input2 = rightAudible ? input2Raw[i] * gain2 : 0f;
-            (left[i], right[i]) = RoutingModeApplier.Apply(RoutingMode, input1, input2);
+            input1[i] = input1Raw[i] * gain1;
+            input2[i] = input2Raw[i] * gain2;
         }
 
-        RaiseLevels(InputChannelId.Input1, left);
-        RaiseLevels(InputChannelId.Input2, right);
+        RaiseLevels(InputChannelId.Input1, input1);
+        RaiseLevels(InputChannelId.Input2, input2);
     }
 
     private void RaiseLevels(InputChannelId channel, ReadOnlySpan<float> samples)

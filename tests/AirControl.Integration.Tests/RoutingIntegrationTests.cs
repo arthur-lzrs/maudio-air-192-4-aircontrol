@@ -14,8 +14,13 @@ public class RoutingIntegrationTests
 {
     private const long LevelsChangedBudgetMs = 100;
 
+    /// <summary>
+    /// Em Input1Mono, o roteamento duplica o Input 1 para as duas saídas físicas, mas os
+    /// meters (research.md §1) continuam refletindo o nível real de cada entrada física — não
+    /// devem mostrar o mesmo valor duplicado, o que esconderia o silêncio real do Input 2.
+    /// </summary>
     [Fact]
-    public void Input1Mono_ReportsEqualLeftAndRightLevelsForRoutedInput()
+    public void Input1Mono_KeepsMetersReflectingRealPerChannelLevel()
     {
         var engine = new FakeAudioEngine();
         engine.Start(null, "fake-output");
@@ -31,13 +36,13 @@ public class RoutingIntegrationTests
         var leftEvent = Assert.Single(received, e => e.Channel == InputChannelId.Input1);
         var rightEvent = Assert.Single(received, e => e.Channel == InputChannelId.Input2);
 
-        Assert.Equal(leftEvent.PeakDb, rightEvent.PeakDb, precision: 3);
         Assert.True(leftEvent.PeakDb > LevelMetering.SilenceFloorDb);
+        Assert.Equal(LevelMetering.SilenceFloorDb, rightEvent.PeakDb);
         Assert.True(stopwatch.ElapsedMilliseconds < LevelsChangedBudgetMs);
     }
 
     [Fact]
-    public void Input2Mono_ReportsEqualLeftAndRightLevelsForRoutedInput()
+    public void Input2Mono_KeepsMetersReflectingRealPerChannelLevel()
     {
         var engine = new FakeAudioEngine();
         engine.Start(null, "fake-output");
@@ -51,8 +56,8 @@ public class RoutingIntegrationTests
         var leftEvent = Assert.Single(received, e => e.Channel == InputChannelId.Input1);
         var rightEvent = Assert.Single(received, e => e.Channel == InputChannelId.Input2);
 
-        Assert.Equal(leftEvent.PeakDb, rightEvent.PeakDb, precision: 3);
-        Assert.True(leftEvent.PeakDb > LevelMetering.SilenceFloorDb);
+        Assert.Equal(LevelMetering.SilenceFloorDb, leftEvent.PeakDb);
+        Assert.True(rightEvent.PeakDb > LevelMetering.SilenceFloorDb);
     }
 
     [Fact]

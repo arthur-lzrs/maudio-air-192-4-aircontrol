@@ -7,9 +7,11 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+        <converters:TrimDbToDisplayConverter x:Key="TrimDbToDisplayConverter" />
     </Window.Resources>
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -29,16 +31,21 @@
 
         <views:InputDeviceSelectorView Grid.Row="2" Margin="0,0,0,8" DataContext="{Binding InputDeviceSelector}" />
 
-        <views:RoutingModeSelectorView Grid.Row="3" Margin="0,0,0,12" DataContext="{Binding RoutingModeSelector}" />
+        <views:RoutingModeSelectorView Grid.Row="3" Margin="0,0,0,8" DataContext="{Binding RoutingModeSelector}" />
 
-        <ToggleButton Grid.Row="4" Margin="0,0,0,12" Padding="6,4" HorizontalAlignment="Left"
+        <StackPanel Grid.Row="4" Margin="0,0,0,12">
+            <views:RecordingFormatSelectorView Margin="0,0,0,8" DataContext="{Binding RecordingFormatSelector}" />
+            <views:DriverSettingsView DataContext="{Binding DriverSettings}" />
+        </StackPanel>
+
+        <ToggleButton Grid.Row="5" Margin="0,0,0,12" Padding="6,4" HorizontalAlignment="Left"
                       Content="Monitoração ativa"
                       IsChecked="{Binding Monitoring.IsMonitoringEnabled, Mode=TwoWay}"
                       AutomationProperties.Name="Habilitar ou desabilitar a monitoração audível"
                       AutomationProperties.HelpText="Quando desabilitado, a saída de áudio fica em silêncio, mas os meters continuam funcionando"
                       AutomationProperties.LiveSetting="Assertive" />
 
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center">
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Center">
             <StackPanel Margin="0,0,24,0" Width="150">
                 <views:MeterControl ChannelLabel="Input 1"
                                      PeakDb="{Binding Input1Meter.PeakDb}"
@@ -48,21 +55,28 @@
 
                 <TextBlock Text="Trim (dB)" FontSize="10" Margin="0,12,0,0" />
                 <Slider x:Name="Input1TrimSlider"
-                        Minimum="{Binding Input1Trim.MinDb}"
+                        Minimum="{Binding Input1Trim.SliderFloorDb}"
                         Maximum="{Binding Input1Trim.MaxDb}"
                         Value="{Binding Input1Trim.TrimDb, Mode=TwoWay}"
                         TickFrequency="6" TickPlacement="BottomRight" IsSnapToTickEnabled="False"
                         AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="1"
                         AutomationProperties.Name="Trim do Input 1"
-                        AutomationProperties.HelpText="Ajusta o ganho digital do Input 1 entre -12 e +12 dB" />
+                        AutomationProperties.HelpText="Ajusta o ganho digital do Input 1 entre -∞ (silêncio) e +10 dB" />
                 <Grid>
-                    <TextBlock Text="-12" FontSize="9" HorizontalAlignment="Left" />
-                    <TextBlock Text="0" FontSize="9" HorizontalAlignment="Center" />
-                    <TextBlock Text="+12" FontSize="9" HorizontalAlignment="Right" />
+                    <!-- A faixa é -60 (piso do slider) a +10, não simétrica: "0" fica a 60/70 do
+                         caminho, não no centro — colunas proporcionais mantêm o rótulo alinhado
+                         com a posição real do valor 0 no Slider acima. -->
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60*" />
+                        <ColumnDefinition Width="10*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="-∞" FontSize="9" HorizontalAlignment="Left" />
+                    <TextBlock Grid.Column="0" Text="0" FontSize="9" HorizontalAlignment="Right" />
+                    <TextBlock Grid.Column="1" Text="+10" FontSize="9" HorizontalAlignment="Right" />
                 </Grid>
 
                 <Grid Margin="0,4,0,0">
-                    <TextBlock Text="{Binding Input1Trim.TrimDb, StringFormat={}{0:0.0} dB}"
+                    <TextBlock Text="{Binding Input1Trim.TrimDb, Converter={StaticResource TrimDbToDisplayConverter}}"
                                HorizontalAlignment="Center" FontSize="10" />
                     <Button Content="Reset" Padding="6,0" FontSize="10" HorizontalAlignment="Right"
                             Command="{Binding Input1Trim.ResetCommand}"
@@ -90,21 +104,25 @@
 
                 <TextBlock Text="Trim (dB)" FontSize="10" Margin="0,12,0,0" />
                 <Slider x:Name="Input2TrimSlider"
-                        Minimum="{Binding Input2Trim.MinDb}"
+                        Minimum="{Binding Input2Trim.SliderFloorDb}"
                         Maximum="{Binding Input2Trim.MaxDb}"
                         Value="{Binding Input2Trim.TrimDb, Mode=TwoWay}"
                         TickFrequency="6" TickPlacement="BottomRight" IsSnapToTickEnabled="False"
                         AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="1"
                         AutomationProperties.Name="Trim do Input 2"
-                        AutomationProperties.HelpText="Ajusta o ganho digital do Input 2 entre -12 e +12 dB" />
+                        AutomationProperties.HelpText="Ajusta o ganho digital do Input 2 entre -∞ (silêncio) e +10 dB" />
                 <Grid>
-                    <TextBlock Text="-12" FontSize="9" HorizontalAlignment="Left" />
-                    <TextBlock Text="0" FontSize="9" HorizontalAlignment="Center" />
-                    <TextBlock Text="+12" FontSize="9" HorizontalAlignment="Right" />
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60*" />
+                        <ColumnDefinition Width="10*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="-∞" FontSize="9" HorizontalAlignment="Left" />
+                    <TextBlock Grid.Column="0" Text="0" FontSize="9" HorizontalAlignment="Right" />
+                    <TextBlock Grid.Column="1" Text="+10" FontSize="9" HorizontalAlignment="Right" />
                 </Grid>
 
                 <Grid Margin="0,4,0,0">
-                    <TextBlock Text="{Binding Input2Trim.TrimDb, StringFormat={}{0:0.0} dB}"
+                    <TextBlock Text="{Binding Input2Trim.TrimDb, Converter={StaticResource TrimDbToDisplayConverter}}"
                                HorizontalAlignment="Center" FontSize="10" />
                     <Button Content="Reset" Padding="6,0" FontSize="10" HorizontalAlignment="Right"
                             Command="{Binding Input2Trim.ResetCommand}"

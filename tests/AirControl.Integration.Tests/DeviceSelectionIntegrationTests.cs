@@ -6,14 +6,14 @@ using Xunit;
 namespace AirControl.Integration.Tests;
 
 /// <summary>
-/// Verifica auto-detecção do M-Audio AIR, seleção manual, persistência, fallback em desconexão
-/// (US3, FR-007 a FR-012) e a revalidação de RoutingMode ao trocar de dispositivo (FR-005).
+/// Verifica auto-detecção do M-Audio AIR, o filtro para dispositivos M-Audio apenas (o app é
+/// específico para o AIR 192|4, não um seletor de entrada genérico), o comando de reinício de
+/// conexão, e o fallback ao desconectar.
 /// </summary>
 public class DeviceSelectionIntegrationTests : IDisposable
 {
     private static readonly AudioInputDeviceInfo AirDevice = new("air-id", "M-Audio AIR 192|4", 2, IsAirDevice: true);
     private static readonly AudioInputDeviceInfo OtherDevice = new("other-id", "Built-in Microphone", 2, IsAirDevice: false);
-    private static readonly AudioInputDeviceInfo MonoDevice = new("mono-id", "USB Mono Mic", 1, IsAirDevice: false);
 
     private readonly string _tempFilePath;
 
@@ -43,7 +43,7 @@ public class DeviceSelectionIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void ResolveActiveDevice_WithAirPresentAndNoManualSelection_AutoSelectsAir()
+    public void ResolveActiveDevice_WithAirPresent_AutoSelectsAir()
     {
         var (viewModel, engine, _, _) = CreateViewModel(AirDevice, OtherDevice);
 
@@ -56,7 +56,7 @@ public class DeviceSelectionIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void ResolveActiveDevice_WithNoAirAndNoManualSelection_ExposesNeedsSelectionState()
+    public void ResolveActiveDevice_WithNoAir_ExposesNeedsSelectionState()
     {
         var (viewModel, engine, _, _) = CreateViewModel(OtherDevice);
 
@@ -66,132 +66,135 @@ public class DeviceSelectionIntegrationTests : IDisposable
         Assert.False(engine.IsStarted);
     }
 
+    /// <summary>Só dispositivos M-Audio ficam disponíveis para seleção — o app é específico para o AIR 192|4.</summary>
     [Fact]
-    public void ManualSelection_SwitchesActiveChannelsToSelectedDevice()
-    {
-        var (viewModel, engine, _, _) = CreateViewModel(AirDevice, OtherDevice);
-        viewModel.ResolveActiveDevice();
-
-        viewModel.SelectedDevice = OtherDevice;
-
-        Assert.True(engine.IsStarted);
-        Assert.Equal(OtherDevice.Id, engine.InputDeviceId);
-    }
-
-    [Fact]
-    public void ManualSelection_PersistsAndIsRestoredOnRestart_WhileStillConnected()
-    {
-        var (viewModel, _, _, repository) = CreateViewModel(AirDevice, OtherDevice);
-        viewModel.ResolveActiveDevice();
-        viewModel.SelectedDevice = OtherDevice;
-
-        var (restartedViewModel, restartedEngine, _, _) = CreateViewModel(AirDevice, OtherDevice);
-        restartedViewModel.ResolveActiveDevice();
-
-        Assert.Equal(OtherDevice, restartedViewModel.SelectedDevice);
-        Assert.Equal(OtherDevice.Id, restartedEngine.InputDeviceId);
-        Assert.Equal(OtherDevice.Id, repository.Load().InputDeviceId);
-    }
-
-    [Fact]
-    public void ManualSelection_WhenDeviceDisconnects_FallsBackToAirAutoDetection()
+    public void AvailableDevices_OnlyIncludesAirDevices()
     {
         var (viewModel, _, _, _) = CreateViewModel(AirDevice, OtherDevice);
-        viewModel.ResolveActiveDevice();
-        viewModel.SelectedDevice = OtherDevice;
 
-        var (restartedViewModel, restartedEngine, _, _) = CreateViewModel(AirDevice);
-        restartedViewModel.ResolveActiveDevice();
+        viewModel.RefreshAvailableDevices();
 
-        Assert.False(restartedViewModel.NeedsSelection);
-        Assert.Equal(AirDevice, restartedViewModel.SelectedDevice);
-        Assert.Equal(AirDevice.Id, restartedEngine.InputDeviceId);
+        Assert.Equal(new[] { AirDevice }, viewModel.AvailableDevices);
     }
 
+    /// <summary>Uma preferência de dispositivo não-M-Audio salva por uma versão anterior deixa de resolver, caindo para a auto-detecção do AIR.</summary>
     [Fact]
-    public void ManualSelection_WhenDeviceDisconnectsAndNoAir_PromptsForSelection()
-    {
-        var (viewModel, _, _, _) = CreateViewModel(AirDevice, OtherDevice);
-        viewModel.ResolveActiveDevice();
-        viewModel.SelectedDevice = OtherDevice;
-
-        var (restartedViewModel, restartedEngine, _, _) = CreateViewModel();
-        restartedViewModel.ResolveActiveDevice();
-
-        Assert.True(restartedViewModel.NeedsSelection);
-        Assert.False(restartedEngine.IsStarted);
-    }
-
-    [Fact]
-    public void LiveDisconnect_OfManuallySelectedDevice_FallsBackToAirWithoutRestartingApp()
-    {
-        ISettingsRepository repository = new SettingsRepository(_tempFilePath);
-        repository.Save(repository.Load() with { OutputDeviceId = "fake-output" });
-
-        var engine = new FakeAudioEngine();
-        var deviceProvider = new FakeAudioDeviceProvider();
-        deviceProvider.SetInputDevices(new[] { AirDevice, OtherDevice });
-        deviceProvider.SimulateConnection(true);
-
-        var mainWindowViewModel = new MainWindowViewModel(engine, deviceProvider, repository);
-        mainWindowViewModel.InputDeviceSelector.SelectedDevice = OtherDevice;
-        Assert.Equal(OtherDevice.Id, engine.InputDeviceId);
-
-        deviceProvider.SimulateInputDevicesChanged(new[] { AirDevice });
-
-        Assert.False(mainWindowViewModel.InputDeviceSelector.NeedsSelection);
-        Assert.Equal(AirDevice.Id, engine.InputDeviceId);
-        Assert.True(engine.IsStarted);
-    }
-
-    [Fact]
-    public void Startup_WithoutAirConnected_RestoresPersistedManualSelectionForStillConnectedDevice()
+    public void ResolveActiveDevice_WithPersistedNonAirDevice_FallsBackToAirAutoDetection()
     {
         ISettingsRepository repository = new SettingsRepository(_tempFilePath);
         repository.Save(repository.Load() with { OutputDeviceId = "fake-output", InputDeviceId = OtherDevice.Id });
 
         var engine = new FakeAudioEngine();
         var deviceProvider = new FakeAudioDeviceProvider();
-        deviceProvider.SetInputDevices(new[] { OtherDevice });
-        // O AIR não está conectado no lançamento; apenas o dispositivo manualmente selecionado está.
-        deviceProvider.SimulateConnection(false);
+        deviceProvider.SetInputDevices(new[] { AirDevice, OtherDevice });
 
-        var mainWindowViewModel = new MainWindowViewModel(engine, deviceProvider, repository);
+        var viewModel = new InputDeviceSelectorViewModel(deviceProvider, engine, repository, "fake-output");
+        viewModel.ResolveActiveDevice();
 
-        Assert.False(mainWindowViewModel.InputDeviceSelector.NeedsSelection);
-        Assert.Equal(OtherDevice, mainWindowViewModel.InputDeviceSelector.SelectedDevice);
-        Assert.True(engine.IsStarted);
-        Assert.Equal(OtherDevice.Id, engine.InputDeviceId);
+        Assert.False(viewModel.NeedsSelection);
+        Assert.Equal(AirDevice, viewModel.SelectedDevice);
+        Assert.Equal(AirDevice.Id, engine.InputDeviceId);
     }
 
     [Fact]
-    public void Startup_WithoutAirConnectedAndNoValidPersistedSelection_ExposesNeedsSelectionState()
+    public void RestartConnection_StopsAndResolvesActiveDeviceAgain()
+    {
+        var (viewModel, engine, _, _) = CreateViewModel(AirDevice);
+        viewModel.ResolveActiveDevice();
+        Assert.True(engine.IsStarted);
+
+        viewModel.RestartConnectionCommand.Execute(null);
+
+        Assert.False(viewModel.NeedsSelection);
+        Assert.Equal(AirDevice, viewModel.SelectedDevice);
+        Assert.True(engine.IsStarted);
+        Assert.Equal(AirDevice.Id, engine.InputDeviceId);
+    }
+
+    /// <summary>
+    /// Reproduz o bug reportado: IAudioEngine.Start lança (ex.: 0x88890008, formato não
+    /// suportado) e mesmo assim as seções dependentes do dispositivo (formato de gravação,
+    /// driver M-Audio) devem continuar aparecendo — antes da correção, a exceção não isolada
+    /// impedia RefreshDeviceDependentSections de rodar, fazendo a seção do driver sumir por
+    /// completo mesmo com o dispositivo corretamente reconhecido.
+    /// </summary>
+    [Fact]
+    public void StartFailure_StillUpdatesDeviceDependentSections()
+    {
+        ISettingsRepository repository = new SettingsRepository(_tempFilePath);
+        repository.Save(repository.Load() with { OutputDeviceId = "fake-output" });
+
+        var engine = new FakeAudioEngine();
+        engine.ForcedStartFailure = new InvalidOperationException("0x88890008");
+        var deviceProvider = new FakeAudioDeviceProvider();
+        deviceProvider.SetInputDevices(new[] { AirDevice });
+        deviceProvider.SimulateConnection(true);
+
+        var mainWindowViewModel = new MainWindowViewModel(engine, deviceProvider, repository, new FakeRecordingFormatController(), new FakeRecordingFormatRepository(), new FakeAsioSampleRateController());
+
+        Assert.False(mainWindowViewModel.InputDeviceSelector.NeedsSelection);
+        Assert.Equal(AirDevice, mainWindowViewModel.InputDeviceSelector.SelectedDevice);
+        Assert.False(engine.IsStarted);
+        Assert.True(mainWindowViewModel.DriverSettings.IsAirDeviceActive);
+        Assert.Contains("0x88890008", mainWindowViewModel.CaptureFormatDescription);
+    }
+
+    /// <summary>
+    /// Reproduz o bug reportado: com uma preferência de formato de gravação salva que diverge do
+    /// atual, MainWindowViewModel.RefreshDeviceDependentSections (chamado depois que a captura já
+    /// está rodando) não pode disparar uma segunda escrita — só a resolução pré-Start (via
+    /// InputDeviceSelector.BeforeEngineStart) deve escrever. Antes da correção, a segunda escrita
+    /// acontecia com a captura ativa e sem Stop/Start ao redor, travando os meters silenciosamente.
+    /// </summary>
+    [Fact]
+    public void DeviceResolution_WithMismatchedRecordingFormat_WritesOnlyOnceBeforeStart()
     {
         ISettingsRepository repository = new SettingsRepository(_tempFilePath);
         repository.Save(repository.Load() with { OutputDeviceId = "fake-output" });
 
         var engine = new FakeAudioEngine();
         var deviceProvider = new FakeAudioDeviceProvider();
-        deviceProvider.SetInputDevices(new[] { OtherDevice });
-        deviceProvider.SimulateConnection(false);
+        deviceProvider.SetInputDevices(new[] { AirDevice });
+        deviceProvider.SimulateConnection(true);
 
-        var mainWindowViewModel = new MainWindowViewModel(engine, deviceProvider, repository);
+        var recordingFormatController = new FakeRecordingFormatController();
+        recordingFormatController.SetSupportedFormats(AirDevice.Id, new[] { new RecordingFormat(44100, 16), RecordingFormat.Default });
+        // O dispositivo está atualmente em 44100/16, mas a preferência salva é o Default —
+        // resolução pré-Start deve escrever o Default exatamente uma vez.
+        recordingFormatController.SetCurrentFormat(AirDevice.Id, new RecordingFormat(44100, 16));
+        var recordingFormatRepository = new FakeRecordingFormatRepository();
+        recordingFormatRepository.Save(AirDevice.Id, RecordingFormat.Default);
 
-        Assert.True(mainWindowViewModel.InputDeviceSelector.NeedsSelection);
-        Assert.False(engine.IsStarted);
+        var mainWindowViewModel = new MainWindowViewModel(engine, deviceProvider, repository, recordingFormatController, recordingFormatRepository, new FakeAsioSampleRateController());
+
+        Assert.Equal(1, recordingFormatController.TrySetFormatCallCount);
+        Assert.True(engine.IsStarted);
+
+        // Simula o que RefreshDeviceDependentSections faz de novo depois do Start (ex.: outro
+        // evento de conexão) — não deve gerar uma segunda escrita nem parar o engine.
+        mainWindowViewModel.RecordingFormatSelector.SyncDisplayOnly(mainWindowViewModel.InputDeviceSelector.SelectedDevice);
+
+        Assert.Equal(1, recordingFormatController.TrySetFormatCallCount);
+        Assert.True(engine.IsStarted);
     }
 
     [Fact]
-    public void SwitchingToOneChannelDevice_WhileMultiChannelRoutingActive_FallsBackToInput1Mono()
+    public void LiveDisconnect_OfAirDevice_ExposesNeedsSelectionWithoutRestartingApp()
     {
-        var (viewModel, engine, _, _) = CreateViewModel(AirDevice, MonoDevice);
-        engine.SetChannelCountForDevice(MonoDevice.Id, MonoDevice.ChannelCount);
-        viewModel.ResolveActiveDevice();
-        engine.SetRoutingMode(RoutingMode.CombinedMono);
+        ISettingsRepository repository = new SettingsRepository(_tempFilePath);
+        repository.Save(repository.Load() with { OutputDeviceId = "fake-output" });
 
-        viewModel.SelectedDevice = MonoDevice;
+        var engine = new FakeAudioEngine();
+        var deviceProvider = new FakeAudioDeviceProvider();
+        deviceProvider.SetInputDevices(new[] { AirDevice });
+        deviceProvider.SimulateConnection(true);
 
-        Assert.Equal(1, engine.ActiveInputChannelCount);
-        Assert.Equal(RoutingMode.Input1Mono, engine.RoutingMode);
+        var mainWindowViewModel = new MainWindowViewModel(engine, deviceProvider, repository, new FakeRecordingFormatController(), new FakeRecordingFormatRepository(), new FakeAsioSampleRateController());
+        Assert.Equal(AirDevice.Id, engine.InputDeviceId);
+
+        deviceProvider.SimulateInputDevicesChanged(Array.Empty<AudioInputDeviceInfo>());
+
+        Assert.True(mainWindowViewModel.InputDeviceSelector.NeedsSelection);
+        Assert.False(engine.IsStarted);
     }
 }

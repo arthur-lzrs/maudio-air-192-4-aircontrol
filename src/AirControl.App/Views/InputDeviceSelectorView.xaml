@@ -8,15 +8,25 @@
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </UserControl.Resources>
     <StackPanel>
-        <TextBlock Margin="0,0,0,4" Text="Dispositivo de entrada" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Margin="0,0,0,4" Text="Dispositivo de entrada" />
+            <Button Grid.Column="1" Padding="6,0" FontSize="10"
+                    Content="Reiniciar conexão"
+                    Command="{Binding RestartConnectionCommand}"
+                    AutomationProperties.Name="Reiniciar conexão com o M-Audio" />
+        </Grid>
         <ComboBox ItemsSource="{Binding AvailableDevices}"
                   SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
                   DisplayMemberPath="FriendlyName"
                   AutomationProperties.Name="Seletor de dispositivo de entrada" />
         <TextBlock Margin="0,4,0,0" FontSize="10" Foreground="Red" TextWrapping="Wrap"
-                   Text="Nenhum dispositivo de entrada selecionado. Escolha um dispositivo acima."
+                   Text="Nenhum dispositivo M-Audio encontrado. Conecte o AIR 192|4."
                    Visibility="{Binding NeedsSelection, Converter={StaticResource BooleanToVisibilityConverter}}"
-                   AutomationProperties.Name="Aviso: nenhum dispositivo de entrada selecionado"
+                   AutomationProperties.Name="Aviso: nenhum dispositivo M-Audio encontrado"
                    AutomationProperties.LiveSetting="Assertive" />
     </StackPanel>
 </UserControl>

@@ -8,6 +8,13 @@ public partial class TrimControlViewModel : ViewModelBase
 {
     private const double DefaultTrimDb = 0.0;
 
+    /// <summary>
+    /// Piso finito só para o slider WPF, que não aceita <see cref="double.NegativeInfinity"/>
+    /// como <c>Minimum</c>. Ao chegar neste piso, o valor de domínio gravado é
+    /// <see cref="double.NegativeInfinity"/>, não este número (research.md §2).
+    /// </summary>
+    private const double SliderFloorDbValue = -60.0;
+
     private readonly InputChannelId _channel;
     private readonly IAudioEngine _audioEngine;
     private readonly ISettingsRepository _settingsRepository;
@@ -17,6 +24,7 @@ public partial class TrimControlViewModel : ViewModelBase
 
     public double MinDb => TrimCalculator.MinDb;
     public double MaxDb => TrimCalculator.MaxDb;
+    public double SliderFloorDb => SliderFloorDbValue;
 
     public TrimControlViewModel(InputChannelId channel, IAudioEngine audioEngine, ISettingsRepository settingsRepository)
     {
@@ -26,12 +34,27 @@ public partial class TrimControlViewModel : ViewModelBase
 
         var profile = settingsRepository.Load();
         var savedSettings = channel == InputChannelId.Input1 ? profile.Input1 : profile.Input2;
+        var clampedTrimDb = TrimCalculator.Clamp(savedSettings.TrimDb);
 
-        _trimDb = savedSettings.TrimDb;
-        audioEngine.SetTrim(channel, savedSettings.TrimDb);
+        _trimDb = clampedTrimDb;
+        audioEngine.SetTrim(channel, clampedTrimDb);
     }
 
-    partial void OnTrimDbChanged(double value) => _audioEngine.SetTrim(_channel, value);
+    /// <summary>
+    /// O slider não consegue expressar <see cref="double.NegativeInfinity"/> diretamente — ao
+    /// atingir <see cref="SliderFloorDbValue"/>, o valor de domínio grava silêncio digital exato em
+    /// vez do piso numérico (research.md §2).
+    /// </summary>
+    partial void OnTrimDbChanged(double value)
+    {
+        if (value <= SliderFloorDbValue && !double.IsNegativeInfinity(value))
+        {
+            TrimDb = double.NegativeInfinity;
+            return;
+        }
+
+        _audioEngine.SetTrim(_channel, value);
+    }
 
     [RelayCommand]
     private void Reset()

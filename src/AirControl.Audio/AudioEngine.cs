@@ -264,8 +264,8 @@ public class AudioEngine : IAudioEngine, IDisposable
         var channelCount = format.Channels;
         var sampleCount = e.BytesRecorded / bytesPerSample / channelCount;
 
-        var routedLeft = new float[sampleCount];
-        var routedRight = new float[sampleCount];
+        var input1Samples = new float[sampleCount];
+        var input2Samples = new float[sampleCount];
         var processed = new byte[e.BytesRecorded];
 
         var leftGain = TrimCalculator.ToLinearGain(_trimDb[InputChannelId.Input1]);
@@ -284,15 +284,17 @@ public class AudioEngine : IAudioEngine, IDisposable
 
             var input1 = leftRaw * leftGain;
             var input2 = rightRaw * rightGain;
+            input1Samples[i] = input1;
+            input2Samples[i] = input2;
 
             var input1Out = leftAudible && _monitoringEnabled ? input1 : 0f;
             var input2Out = rightAudible && _monitoringEnabled ? input2 : 0f;
 
             // Roteamento aplicado depois de trim/mute/solo já resolvidos (FR-006), alimentando
-            // tanto o buffer de saída quanto os meters com o mesmo par (left, right) (research.md §1).
+            // apenas o buffer de saída (caminho audível). Os meters usam o par pré-gate/
+            // pré-roteamento (input1Samples/input2Samples) para nunca silenciar com mute/solo/
+            // monitoramento desativado (research.md §1).
             var (left, right) = RoutingModeApplier.Apply(_routingMode, input1Out, input2Out);
-            routedLeft[i] = left;
-            routedRight[i] = right;
 
             SampleFormatIO.WriteSample(processed, frameOffset, left, format);
             if (channelCount > 1)
@@ -303,8 +305,8 @@ public class AudioEngine : IAudioEngine, IDisposable
 
         _outputBuffer.AddSamples(processed, 0, processed.Length);
 
-        RaiseLevels(InputChannelId.Input1, routedLeft);
-        RaiseLevels(InputChannelId.Input2, routedRight);
+        RaiseLevels(InputChannelId.Input1, input1Samples);
+        RaiseLevels(InputChannelId.Input2, input2Samples);
     }
 
     private void RaiseLevels(InputChannelId channel, ReadOnlySpan<float> samples)

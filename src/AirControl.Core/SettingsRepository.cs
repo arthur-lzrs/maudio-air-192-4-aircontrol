@@ -1,9 +1,16 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AirControl.Core;
 
 public class SettingsRepository : ISettingsRepository
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
+
     private readonly string _filePath;
 
     public SettingsRepository()
@@ -32,7 +39,7 @@ public class SettingsRepository : ISettingsRepository
         try
         {
             var json = File.ReadAllText(_filePath);
-            var profile = JsonSerializer.Deserialize<ChannelSettingsProfile>(json);
+            var profile = JsonSerializer.Deserialize<ChannelSettingsProfile>(json, SerializerOptions);
             return profile ?? ChannelSettingsProfile.Default;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -49,7 +56,7 @@ public class SettingsRepository : ISettingsRepository
             Directory.CreateDirectory(directory);
         }
 
-        var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(profile, SerializerOptions);
         File.WriteAllText(_filePath, json);
     }
 }

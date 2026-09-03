@@ -60,4 +60,19 @@ public class SettingsRepositoryTests : IDisposable
 
         Assert.Equal(original, loaded);
     }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsNegativeInfinityTrim()
+    {
+        var repository = new SettingsRepository(_tempFilePath);
+        var original = new ChannelSettingsProfile(
+            Input1: new ChannelSettings(TrimDb: double.NegativeInfinity, IsMuted: false, IsSoloed: false),
+            Input2: ChannelSettings.Default,
+            OutputDeviceId: null);
+
+        repository.Save(original);
+        var loaded = repository.Load();
+
+        Assert.Equal(double.NegativeInfinity, loaded.Input1.TrimDb);
+    }
 }

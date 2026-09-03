@@ -20,11 +20,19 @@ public partial class MainWindowViewModel : ViewModelBase
     public MonitoringViewModel Monitoring { get; }
     public InputDeviceSelectorViewModel InputDeviceSelector { get; }
     public RoutingModeSelectorViewModel RoutingModeSelector { get; }
+    public RecordingFormatSelectorViewModel RecordingFormatSelector { get; }
+    public DriverSettingsViewModel DriverSettings { get; }
 
     [ObservableProperty]
     private string? _captureFormatDescription;
 
-    public MainWindowViewModel(IAudioEngine audioEngine, IAudioDeviceProvider deviceProvider, ISettingsRepository settingsRepository)
+    public MainWindowViewModel(
+        IAudioEngine audioEngine,
+        IAudioDeviceProvider deviceProvider,
+        ISettingsRepository settingsRepository,
+        IRecordingFormatController recordingFormatController,
+        IRecordingFormatRepository recordingFormatRepository,
+        IAsioSampleRateController asioSampleRateController)
     {
         _audioEngine = audioEngine;
         _settingsRepository = settingsRepository;
@@ -43,7 +51,48 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var outputDeviceId = settingsRepository.Load().OutputDeviceId ?? string.Empty;
         InputDeviceSelector = new InputDeviceSelectorViewModel(deviceProvider, audioEngine, settingsRepository, outputDeviceId);
+        RecordingFormatSelector = new RecordingFormatSelectorViewModel(
+            recordingFormatController,
+            recordingFormatRepository,
+            audioEngine,
+            asioSampleRateController,
+            outputDeviceId);
+        DriverSettings = new DriverSettingsViewModel(audioEngine, asioSampleRateController, outputDeviceId);
+        // Corrige o "Formato Padrão" do Windows ANTES do próximo Start (research.md §5) — evita
+        // que a primeira captura aconteça com um formato desatualizado do Windows (ex.: 44.1kHz
+        // herdado do boot), que exigiria detectar e corrigir depois de já iniciado. Uma falha
+        // aqui (a escrita do formato é conhecida por ser instável neste hardware) nunca pode
+        // impedir o Start() que vem logo em seguida em InputDeviceSelectorViewModel.StartWith.
+        InputDeviceSelector.BeforeEngineStart += (_, device) =>
+        {
+            try
+            {
+                RecordingFormatSelector.ResolveForDevice(device);
+            }
+            catch (Exception ex)
+            {
+                RecordingFormatSelector.ReportUnexpectedFailure(ex);
+            }
+        };
         InputDeviceSelector.ActiveDeviceChanged += (_, _) => OnActiveInputDeviceChanged();
+
+        // O driver ASIO e o "Formato Padrão" do Windows são estados independentes neste hardware
+        // (confirmado ao vivo — nem escrita nem reconexão física resincroniza um com o outro).
+        // Recalcula o aviso de descasamento sempre que qualquer um dos dois lados muda.
+        RecordingFormatSelector.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(RecordingFormatSelectorViewModel.SelectedFormat))
+            {
+                DriverSettings.UpdateSampleRateMismatch(RecordingFormatSelector.SelectedFormat?.SampleRate);
+            }
+        };
+        DriverSettings.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(DriverSettingsViewModel.SelectedSampleRate))
+            {
+                DriverSettings.UpdateSampleRateMismatch(RecordingFormatSelector.SelectedFormat?.SampleRate);
+            }
+        };
 
         deviceProvider.ConnectionChanged += (_, args) => OnConnectionChanged(args);
         deviceProvider.InputDevicesChanged += (_, _) => OnInputDevicesChanged();
@@ -77,7 +126,8 @@ public partial class MainWindowViewModel : ViewModelBase
             if (!InputDeviceSelector.NeedsSelection)
             {
                 RoutingModeSelector.ApplyPersistedMode();
-                CaptureFormatDescription = _audioEngine.CaptureFormatDescription;
+                RefreshDeviceDependentSections();
+                CaptureFormatDescription = GetCaptureStatusDescription();
             }
         }
         catch (Exception ex)
@@ -89,6 +139,19 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <see cref="IAudioEngine.Start"/> agora nunca deixa uma falha (ex.: formato não suportado,
+    /// 0x88890008) escapar de <see cref="InputDeviceSelectorViewModel.StartWith"/> — isolada em
+    /// <see cref="InputDeviceSelectorViewModel.StartFailure"/> para não impedir as demais seções
+    /// dependentes do dispositivo de atualizar (mesma classe de bug corrigida em
+    /// <see cref="RefreshDeviceDependentSections"/>). Esta função traduz esse estado para a
+    /// mesma mensagem acionável que antes só aparecia quando a exceção derrubava o fluxo inteiro.
+    /// </summary>
+    private string? GetCaptureStatusDescription() =>
+        InputDeviceSelector.StartFailure is { } ex
+            ? $"Falha ao iniciar monitoração: {ex.Message}"
+            : _audioEngine.CaptureFormatDescription;
+
+    /// <summary>
     /// Após uma troca manual de dispositivo de entrada (FR-010), revalida o modo de roteamento
     /// atualmente selecionado contra a nova contagem de canais (FR-005) e atualiza o diagnóstico
     /// de formato de captura.
@@ -96,7 +159,35 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OnActiveInputDeviceChanged()
     {
         RoutingModeSelector.ApplyPersistedMode();
-        CaptureFormatDescription = _audioEngine.CaptureFormatDescription;
+        RefreshDeviceDependentSections();
+        CaptureFormatDescription = GetCaptureStatusDescription();
+    }
+
+    /// <summary>
+    /// Atualiza as seções que só ficam visíveis/habilitadas quando o M-Audio é o dispositivo
+    /// ativo (formato de gravação, driver), reaproveitando <see cref="AudioInputDeviceInfo.IsAirDevice"/>
+    /// já resolvido por <see cref="InputDeviceSelectorViewModel"/> (research.md §7).
+    /// </summary>
+    private void RefreshDeviceDependentSections()
+    {
+        // Só sincroniza a exibição aqui (nunca escreve) — a captura já está rodando neste ponto.
+        // RecordingFormatSelector.ResolveForDevice (que PODE escrever no dispositivo) já rodou
+        // antes do Start via InputDeviceSelector.BeforeEngineStart; chamá-lo de novo aqui, com a
+        // captura ativa, podia levar a uma nova escrita sem Stop/Start ao redor — travava os
+        // meters silenciosamente. Cada seção é independente: uma falha nunca pode impedir a
+        // outra de atualizar (foi exatamente uma exceção não isolada que fazia o botão "Abrir
+        // painel M-Audio" sumir mesmo com o dispositivo ativo e capturando sinal normalmente).
+        try
+        {
+            RecordingFormatSelector.SyncDisplayOnly(InputDeviceSelector.SelectedDevice);
+        }
+        catch (Exception ex)
+        {
+            RecordingFormatSelector.ReportUnexpectedFailure(ex);
+        }
+
+        DriverSettings.UpdateForDevice(InputDeviceSelector.SelectedDevice);
+        DriverSettings.UpdateSampleRateMismatch(RecordingFormatSelector.SelectedFormat?.SampleRate);
     }
 
     /// <summary>
@@ -120,11 +211,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (InputDeviceSelector.NeedsSelection)
         {
+            RefreshDeviceDependentSections();
             CaptureFormatDescription = null;
             return;
         }
 
         RoutingModeSelector.ApplyPersistedMode();
-        CaptureFormatDescription = _audioEngine.CaptureFormatDescription;
+        RefreshDeviceDependentSections();
+        CaptureFormatDescription = GetCaptureStatusDescription();
     }
 }
