@@ -261,15 +261,22 @@ public class AudioEngine : IAudioEngine, IDisposable
     /// </summary>
     private WasapiOut CreateAndInitOutput(MMDevice outputDevice, BufferedWaveProvider source)
     {
+        DiagLog.Write($"CreateAndInitOutput: source={DescribeFormat(source.WaveFormat)} outputMixFormat={DescribeFormat(outputDevice.AudioClient.MixFormat)}");
         var output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
         try
         {
             output.Init(source);
+            DiagLog.Write("CreateAndInitOutput: sucesso na tentativa 1 (source direto)");
             return output;
         }
-        catch (COMException ex) when (IsUnsupportedFormat(ex))
+        catch (Exception ex)
         {
+            DiagLog.Write($"CreateAndInitOutput: tentativa 1 (source direto) falhou — {ex.GetType().Name} 0x{ex.HResult:X8}");
             output.Dispose();
+            if (ex is not COMException comEx || !IsUnsupportedFormat(comEx))
+            {
+                throw;
+            }
         }
 
         EnsureMediaFoundationStarted();
@@ -280,12 +287,18 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             _resampler = new MediaFoundationResampler(source, outputMixFormat) { ResamplerQuality = 60 };
             output.Init(_resampler);
+            DiagLog.Write($"CreateAndInitOutput: sucesso na tentativa 2 (resample p/ {DescribeFormat(outputMixFormat)})");
             return output;
         }
-        catch (COMException ex) when (IsUnsupportedFormat(ex))
+        catch (Exception ex)
         {
+            DiagLog.Write($"CreateAndInitOutput: tentativa 2 (resample p/ {DescribeFormat(outputMixFormat)}) falhou — {ex.GetType().Name} 0x{ex.HResult:X8}");
             output.Dispose();
             _resampler?.Dispose();
+            if (ex is not COMException comEx || !IsUnsupportedFormat(comEx))
+            {
+                throw;
+            }
         }
 
         var plainFormat = WaveFormat.CreateIeeeFloatWaveFormat(outputMixFormat.SampleRate, outputMixFormat.Channels);
@@ -294,10 +307,12 @@ public class AudioEngine : IAudioEngine, IDisposable
         try
         {
             output.Init(_resampler);
+            DiagLog.Write($"CreateAndInitOutput: sucesso na tentativa 3 (resample p/ {DescribeFormat(plainFormat)})");
             return output;
         }
-        catch
+        catch (Exception ex)
         {
+            DiagLog.Write($"CreateAndInitOutput: tentativa 3 (resample p/ {DescribeFormat(plainFormat)}) TAMBÉM falhou — {ex.GetType().Name} 0x{ex.HResult:X8}");
             // Mesma classe de vazamento corrigida em TryStartCapture (S7): sem isto, um AudioClient
             // de saída jamais liberado sobrevive à exceção e segura o dispositivo de saída.
             output.Dispose();
