@@ -75,7 +75,7 @@ public class AudioEngine : IAudioEngine, IDisposable
                 DiscardOnBufferOverflow = true,
             };
 
-            _output = CreateAndInitOutput(outputDevice, _outputBuffer);
+            _output = CreateAndInitOutputWithRetry(outputDevice, _outputBuffer);
             _output.PlaybackStopped += OnPlaybackStopped;
             _output.Play();
 
@@ -250,6 +250,38 @@ public class AudioEngine : IAudioEngine, IDisposable
             }
         }
     }
+
+    /// <summary>Repetições de <see cref="CreateAndInitOutput"/> — achado ao investigar S7 com
+    /// diagnóstico ao vivo (research.md §1): quando entrada e saída são o MESMO dispositivo físico
+    /// (comum no AIR 192|4, usado para monitorar pelo próprio hardware), a captura sempre negocia
+    /// com sucesso, mas a saída — negociada milissegundos depois, no mesmo barramento USB — falha
+    /// na maioria das aberturas (0x88890008/0x88890004). O driver aparentemente precisa de um
+    /// instante entre as duas negociações no mesmo dispositivo. Repetição bounded (nunca laço
+    /// infinito), não polling: só dispara em resposta à falha do Start() atual.</summary>
+    private const int MaxOutputInitRetries = 4;
+
+    private static readonly TimeSpan OutputInitRetryDelay = TimeSpan.FromMilliseconds(250);
+
+    private WasapiOut CreateAndInitOutputWithRetry(MMDevice outputDevice, BufferedWaveProvider source)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var result = CreateAndInitOutput(outputDevice, source);
+                DiagLog.Write($"CreateAndInitOutputWithRetry: sucesso na tentativa {attempt}");
+                return result;
+            }
+            catch (COMException ex) when (IsUnsupportedFormatOrInvalidated(ex) && attempt < MaxOutputInitRetries)
+            {
+                DiagLog.Write($"CreateAndInitOutputWithRetry: tentativa {attempt} falhou (0x{ex.HResult:X8}), aguardando {OutputInitRetryDelay.TotalMilliseconds}ms antes de repetir");
+                Thread.Sleep(OutputInitRetryDelay);
+            }
+        }
+    }
+
+    private static bool IsUnsupportedFormatOrInvalidated(COMException ex) =>
+        unchecked((uint)ex.HResult) is 0x88890008 or 0x88890004;
 
     /// <summary>
     /// O formato negociado para a captura pode não ser aceito diretamente pelo dispositivo de
