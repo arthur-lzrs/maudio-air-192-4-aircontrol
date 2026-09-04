@@ -56,16 +56,19 @@ public class AudioEngine : IAudioEngine, IDisposable
 
     public void Start(string? inputDeviceId, string outputDeviceId)
     {
+        DiagLog.Write($"Start: chamado (uptime do processo = {Environment.TickCount64}ms)");
         Stop();
 
         try
         {
             using var enumerator = new MMDeviceEnumerator();
             var inputDevice = ResolveInputDevice(enumerator, inputDeviceId);
+            DiagLog.Write($"Start: dispositivo de entrada resolvido, MixFormat atual = {DescribeFormat(inputDevice.AudioClient.MixFormat)}");
 
             var outputDevice = ResolveOutputDevice(enumerator, outputDeviceId);
 
             _capture = CreateAndStartCapture(inputDevice);
+            DiagLog.Write($"Start: captura iniciada com sucesso, formato final = {DescribeFormat(_capture.WaveFormat)}");
 
             _outputBuffer = new BufferedWaveProvider(_capture.WaveFormat)
             {
@@ -101,14 +104,19 @@ public class AudioEngine : IAudioEngine, IDisposable
 
             StartWatchdog();
         }
-        catch
+        catch (Exception ex)
         {
+            DiagLog.Write($"Start: FALHOU — {ex.GetType().Name} 0x{ex.HResult:X8}: {ex.Message}");
             // Não deixa a engine em estado parcial (ex.: captura iniciada mas saída não) se
             // qualquer etapa falhar no meio do caminho.
             Stop();
             throw;
         }
     }
+
+    private static string DescribeFormat(WaveFormat format) =>
+        $"{format.Channels}ch/{format.BitsPerSample}-bit/{format.SampleRate}Hz/{format.Encoding}" +
+        (format is WaveFormatExtensible ext ? $"/sub={ext.SubFormat}" : string.Empty);
 
     /// <summary>
     /// Resolve o dispositivo de entrada pelo id informado, se ainda ativo; caso contrário (ou se
@@ -188,18 +196,22 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             try
             {
-                return TryStartCapture(inputDevice);
+                var result = TryStartCapture(inputDevice, attempt);
+                DiagLog.Write($"CreateAndStartCapture: sucesso na tentativa {attempt}");
+                return result;
             }
             catch (COMException ex) when (IsUnsupportedFormat(ex) && attempt < MaxUnsupportedFormatRetries)
             {
+                DiagLog.Write($"CreateAndStartCapture: tentativa {attempt} falhou (0x{ex.HResult:X8}), aguardando {UnsupportedFormatRetryDelay.TotalMilliseconds}ms antes de repetir");
                 Thread.Sleep(UnsupportedFormatRetryDelay);
             }
         }
     }
 
-    private WasapiCapture TryStartCapture(MMDevice inputDevice)
+    private WasapiCapture TryStartCapture(MMDevice inputDevice, int attempt)
     {
         var capture = new WasapiCapture(inputDevice);
+        DiagLog.Write($"TryStartCapture[{attempt}]: tentando formato padrão {DescribeFormat(capture.WaveFormat)}");
         capture.DataAvailable += OnDataAvailable;
         capture.RecordingStopped += OnRecordingStopped;
         try
@@ -210,6 +222,7 @@ public class AudioEngine : IAudioEngine, IDisposable
         catch (COMException ex) when (IsUnsupportedFormat(ex))
         {
             var fallbackFormat = WaveFormat.CreateIeeeFloatWaveFormat(capture.WaveFormat.SampleRate, capture.WaveFormat.Channels);
+            DiagLog.Write($"TryStartCapture[{attempt}]: formato padrão falhou (0x{ex.HResult:X8}), tentando fallback {DescribeFormat(fallbackFormat)}");
             capture.DataAvailable -= OnDataAvailable;
             capture.RecordingStopped -= OnRecordingStopped;
             capture.Dispose();
@@ -222,8 +235,9 @@ public class AudioEngine : IAudioEngine, IDisposable
                 capture.StartRecording();
                 return capture;
             }
-            catch
+            catch (Exception fallbackEx)
             {
+                DiagLog.Write($"TryStartCapture[{attempt}]: fallback TAMBÉM falhou — {fallbackEx.GetType().Name} 0x{fallbackEx.HResult:X8}");
                 // Achado ao investigar S7: se a tentativa de fallback também falhar, o AudioClient
                 // desta segunda captura NUNCA era liberado (sem Dispose aqui) — ficava vivo,
                 // segurando o dispositivo, e sabotava toda tentativa seguinte (inclusive as 3

@@ -65,6 +65,7 @@ public class WindowsRecordingFormatController : IRecordingFormatController
             return false;
         }
 
+        DiagLog.Write($"TrySetFormat: escrevendo {format} via IPolicyConfig::SetDeviceFormat");
         try
         {
             DeviceFormatPropertyStore.WriteDefaultFormat(deviceId, format.SampleRate, format.BitDepth);
