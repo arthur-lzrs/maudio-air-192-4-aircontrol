@@ -230,23 +230,79 @@ recebe registro explícito de não-reprodução + plano de monitoramento (FR-017
 > seção está pronta para ser preenchida e aprovada por um humano quando ele quiser. Nenhuma troca de
 > tecnologia foi aplicada ao código.
 
-Itens candidatos identificados na base atual:
+Itens candidatos, com recomendação (T029, 2026-09-03 — informada pelo que a validação manual desta
+feature revelou sobre o comportamento real do AIR 192|4, especialmente S7/S8):
 
-1. **Captura orientada a evento (`WasapiCapture` event-driven / exclusive mode)** vs. o modo
-   compartilhado atual — benefício potencial: latência menor e formato sob controle do app (menos
-   dessincronia ASIO/Windows); custo/risco: modo exclusivo bloqueia outros apps.
-2. **Recuperação nativa de dispositivo do NAudio** (`AudioClient`/`IAudioSessionEvents`,
-   `IMMNotificationClient` mais granular) — aproveitar sinais que hoje ignoramos
-   (`OnDefaultDeviceChanged`, `OnPropertyValueChanged`) para recuperação mais precisa.
-3. **Alternativas à camada de captura** (ex.: WASAPI direto via `Vortice`/`CSCore`, ou host ASIO
-   completo) — só se a revisão mostrar ganho concreto que a base atual não entrega; prós/contras/
-   risco de migração documentados (FR-020).
-4. **Configuração subótima atual** — `MediaFoundationResampler` com `ResamplerQuality = 60` e
-   `latency: 50` no `WasapiOut`: medir se ajustes reduzem xruns/latência (FR-020, item de
-   configuração com "como medir a melhoria").
+### 1. Captura orientada a evento / modo exclusivo (`WasapiCapture` exclusive mode)
+
+- **Benefício potencial**: latência menor; formato sob controle direto do app, evitando parte da
+  dessincronia ASIO/Windows que causou S3/S7/S8.
+- **Custo/risco**: modo exclusivo **bloqueia qualquer outro app** de usar o AIR 192|4 enquanto o
+  AirControl estiver rodando (inclusive o próprio painel M-Audio, o Windows Sound Settings, ou
+  qualquer DAW). Depois de S7 confirmarmos que entrada+saída no mesmo dispositivo já é delicado em
+  modo compartilhado, ir para exclusivo aumenta esse risco, não reduz.
+- **Recomendação: NÃO ADOTAR.** O ganho de latência não foi pedido nem reportado como problema; o
+  custo (travar o dispositivo para outros apps) é desproporcional.
+- **Como mediria, se revisitado**: latência ponta-a-ponta (loopback/aplauso cronometrado) modo
+  compartilhado vs. exclusivo, MAIS um teste funcional confirmando que o painel M-Audio e o Windows
+  Sound Settings continuam operáveis com o AirControl aberto.
+
+### 2. Sinais mais granulares de recuperação (`IAudioSessionEvents`, `OnDefaultDeviceChanged`, `OnPropertyValueChanged`)
+
+- **Benefício potencial**: detectar mudanças de dispositivo/formato mais cedo ou com mais precisão
+  do que o watchdog atual (timestamp de silêncio + `RecordingStopped`/`PlaybackStopped`).
+- **Custo/risco**: mais superfície de interop COM, mais casos de teste; esses eventos são conhecidos
+  por disparar de forma inconsistente entre drivers — o próprio AIR 192|4 já se mostrou um driver
+  com comportamento peculiar nesta investigação (S7/S8), o que é motivo para desconfiar da
+  confiabilidade desses sinais aqui, não para depender mais deles.
+- **Recomendação: NÃO ADOTAR agora.** O watchdog implementado (T012–T019) já cumpre SC-002 (detecta
+  parada em ≤5s) na validação manual (V2, sem congelamento silencioso em nenhuma perturbação
+  testada). Sem um sintoma concreto não coberto pelo watchdog atual, a complexidade extra não se
+  paga.
+- **Como mediria, se revisitado**: tempo de detecção e taxa de falso positivo/negativo em falhas
+  injetadas (desconectar cabo, matar o driver, trocar dispositivo padrão do Windows), watchdog atual
+  vs. com os sinais adicionais.
+
+### 3. Alternativa à camada de captura (WASAPI direto via `Vortice`/`CSCore`, ou host ASIO completo)
+
+- **Benefício potencial**: evitar de vez as peculiaridades do modo compartilhado WASAPI que geraram
+  S3/S7/S8 nesta feature.
+- **Custo/risco**: reescrita completa da camada de I/O de áudio — a maior migração possível deste
+  item. Perderia todo o endurecimento específico a este hardware que acabamos de construir (retries
+  de S7, matriz de formatos de S8) e teria que redescobrir as mesmas peculiaridades do zero em uma
+  API diferente.
+- **Recomendação: NÃO ADOTAR.** Depois de S7/S8 corrigidos, a validação manual (V1–V3) mostra a
+  implementação WASAPI atual estável (10/10 aberturas, 60 min de perturbações sem congelamento
+  silencioso). Não há ganho concreto identificado que justifique o custo de uma reescrita.
+- **Como mediria, se revisitado**: só faria sentido com um protótipo paralelo completo para
+  comparação justa antes/depois — não é um ajuste incremental.
+
+### 4. Configuração de resample/latência (`MediaFoundationResampler.ResamplerQuality = 60`, `WasapiOut latency: 50`)
+
+- **Benefício potencial**: reduzir latência percebida (baixando o valor de `latency`) ou reduzir
+  artefatos de resample (ajustando `ResamplerQuality`). Mudança de configuração, não estrutural.
+- **Custo/risco**: baixo e reversível — mas um `latency` baixo demais pode causar xruns
+  (estouro/falha de buffer), especialmente neste dispositivo que já se mostrou sensível a timing
+  (S7). Risco controlável: se piorar, é só devolver o valor atual.
+- **Recomendação: CANDIDATO A TESTAR.** É o único item barato o suficiente para valer a pena
+  experimentar agora — baixo risco, fácil de reverter (FR-020d), e mede exatamente o que a spec pede
+  (latência/qualidade).
+- **Como mediria**: com sinal ao vivo, cronometrar a latência ponta-a-ponta (ex.: aplauso/clique
+  captado e ouvido no monitor) e monitorar `StreamHealthChanged` por 30 min contínuos em `latency:
+  50` (linha de base atual) vs. um valor menor (ex.: 30ms) — só adota se a latência cair
+  perceptivelmente E zero transições para `Stalled`/`Faulted` aparecerem na janela de teste.
 
 Cada item aprovado é aplicado e medido; um que não entregue a melhoria ou introduza regressão é
 revertido com o motivo registrado aqui (FR-020d).
+
+**Decisão do responsável (T030, 2026-09-03)**:
+
+| Item | Decisão | Motivo |
+|------|---------|--------|
+| 1. Modo exclusivo | **Não adotado** | Travaria o dispositivo para outros apps sem ganho pedido |
+| 2. Sinais COM granulares | **Não adotado** | Watchdog atual já cobre SC-002; mais dependência de um driver já peculiar é risco |
+| 3. Trocar camada de captura | **Não adotado** | Reescrita completa sem ganho concreto; perderia o endurecimento de S7/S8 |
+| 4. Latência/resample | **Aprovado para teste** | Baixo risco, reversível, mede exatamente o que a spec pede |
 
 ---
 

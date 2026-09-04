@@ -266,6 +266,14 @@ public class AudioEngine : IAudioEngine, IDisposable
         unchecked((uint)ex.HResult) is 0x88890008 or 0x88890004;
 
     /// <summary>
+    /// research.md §7 item 4 (aprovado para teste em 2026-09-03): valor anterior era 50ms. Linha de
+    /// base (50ms) já validada estável por 60min de perturbações manuais (V2). Reverter para 50 se a
+    /// medição não mostrar ganho perceptível de latência ou se aparecer qualquer transição para
+    /// Stalled/Faulted que não aparecia antes (FR-020d).
+    /// </summary>
+    private const int OutputLatencyMs = 30;
+
+    /// <summary>
     /// O formato negociado para a captura pode não ser aceito diretamente pelo dispositivo de
     /// saída escolhido (taxas/canais/bits diferentes, ou a mesma variação de struct
     /// WAVEFORMATEXTENSIBLE-vs-plana descrita em <see cref="CreateAndStartCapture"/>). Tenta
@@ -275,7 +283,7 @@ public class AudioEngine : IAudioEngine, IDisposable
     /// </summary>
     private WasapiOut CreateAndInitOutput(MMDevice outputDevice, BufferedWaveProvider source)
     {
-        var output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
+        var output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: OutputLatencyMs);
         try
         {
             output.Init(source);
@@ -293,7 +301,7 @@ public class AudioEngine : IAudioEngine, IDisposable
         EnsureMediaFoundationStarted();
         var outputMixFormat = outputDevice.AudioClient.MixFormat;
 
-        output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
+        output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: OutputLatencyMs);
         try
         {
             _resampler = new MediaFoundationResampler(source, outputMixFormat) { ResamplerQuality = 60 };
@@ -311,7 +319,7 @@ public class AudioEngine : IAudioEngine, IDisposable
         }
 
         var plainFormat = WaveFormat.CreateIeeeFloatWaveFormat(outputMixFormat.SampleRate, outputMixFormat.Channels);
-        output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
+        output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: OutputLatencyMs);
         _resampler = new MediaFoundationResampler(source, plainFormat) { ResamplerQuality = 60 };
         try
         {
