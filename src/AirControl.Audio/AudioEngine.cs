@@ -56,19 +56,16 @@ public class AudioEngine : IAudioEngine, IDisposable
 
     public void Start(string? inputDeviceId, string outputDeviceId)
     {
-        DiagLog.Write($"Start: chamado (uptime do processo = {Environment.TickCount64}ms)");
         Stop();
 
         try
         {
             using var enumerator = new MMDeviceEnumerator();
             var inputDevice = ResolveInputDevice(enumerator, inputDeviceId);
-            DiagLog.Write($"Start: dispositivo de entrada resolvido, MixFormat atual = {DescribeFormat(inputDevice.AudioClient.MixFormat)}");
 
             var outputDevice = ResolveOutputDevice(enumerator, outputDeviceId);
 
             _capture = CreateAndStartCapture(inputDevice);
-            DiagLog.Write($"Start: captura iniciada com sucesso, formato final = {DescribeFormat(_capture.WaveFormat)}");
 
             _outputBuffer = new BufferedWaveProvider(_capture.WaveFormat)
             {
@@ -104,19 +101,14 @@ public class AudioEngine : IAudioEngine, IDisposable
 
             StartWatchdog();
         }
-        catch (Exception ex)
+        catch
         {
-            DiagLog.Write($"Start: FALHOU — {ex.GetType().Name} 0x{ex.HResult:X8}: {ex.Message}");
             // Não deixa a engine em estado parcial (ex.: captura iniciada mas saída não) se
             // qualquer etapa falhar no meio do caminho.
             Stop();
             throw;
         }
     }
-
-    private static string DescribeFormat(WaveFormat format) =>
-        $"{format.Channels}ch/{format.BitsPerSample}-bit/{format.SampleRate}Hz/{format.Encoding}" +
-        (format is WaveFormatExtensible ext ? $"/sub={ext.SubFormat}" : string.Empty);
 
     /// <summary>
     /// Resolve o dispositivo de entrada pelo id informado, se ainda ativo; caso contrário (ou se
@@ -196,22 +188,18 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             try
             {
-                var result = TryStartCapture(inputDevice, attempt);
-                DiagLog.Write($"CreateAndStartCapture: sucesso na tentativa {attempt}");
-                return result;
+                return TryStartCapture(inputDevice);
             }
             catch (COMException ex) when (IsUnsupportedFormat(ex) && attempt < MaxUnsupportedFormatRetries)
             {
-                DiagLog.Write($"CreateAndStartCapture: tentativa {attempt} falhou (0x{ex.HResult:X8}), aguardando {UnsupportedFormatRetryDelay.TotalMilliseconds}ms antes de repetir");
                 Thread.Sleep(UnsupportedFormatRetryDelay);
             }
         }
     }
 
-    private WasapiCapture TryStartCapture(MMDevice inputDevice, int attempt)
+    private WasapiCapture TryStartCapture(MMDevice inputDevice)
     {
         var capture = new WasapiCapture(inputDevice);
-        DiagLog.Write($"TryStartCapture[{attempt}]: tentando formato padrão {DescribeFormat(capture.WaveFormat)}");
         capture.DataAvailable += OnDataAvailable;
         capture.RecordingStopped += OnRecordingStopped;
         try
@@ -222,7 +210,6 @@ public class AudioEngine : IAudioEngine, IDisposable
         catch (COMException ex) when (IsUnsupportedFormat(ex))
         {
             var fallbackFormat = WaveFormat.CreateIeeeFloatWaveFormat(capture.WaveFormat.SampleRate, capture.WaveFormat.Channels);
-            DiagLog.Write($"TryStartCapture[{attempt}]: formato padrão falhou (0x{ex.HResult:X8}), tentando fallback {DescribeFormat(fallbackFormat)}");
             capture.DataAvailable -= OnDataAvailable;
             capture.RecordingStopped -= OnRecordingStopped;
             capture.Dispose();
@@ -235,14 +222,12 @@ public class AudioEngine : IAudioEngine, IDisposable
                 capture.StartRecording();
                 return capture;
             }
-            catch (Exception fallbackEx)
+            catch
             {
-                DiagLog.Write($"TryStartCapture[{attempt}]: fallback TAMBÉM falhou — {fallbackEx.GetType().Name} 0x{fallbackEx.HResult:X8}");
                 // Achado ao investigar S7: se a tentativa de fallback também falhar, o AudioClient
                 // desta segunda captura NUNCA era liberado (sem Dispose aqui) — ficava vivo,
                 // segurando o dispositivo, e sabotava toda tentativa seguinte (inclusive as 3
-                // repetições do retry acima). Provável causa real dos 18/20 falhando sempre, não
-                // apenas o driver "não ter liberado a sessão anterior".
+                // repetições do retry acima).
                 capture.DataAvailable -= OnDataAvailable;
                 capture.RecordingStopped -= OnRecordingStopped;
                 capture.Dispose();
@@ -268,13 +253,10 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             try
             {
-                var result = CreateAndInitOutput(outputDevice, source);
-                DiagLog.Write($"CreateAndInitOutputWithRetry: sucesso na tentativa {attempt}");
-                return result;
+                return CreateAndInitOutput(outputDevice, source);
             }
             catch (COMException ex) when (IsUnsupportedFormatOrInvalidated(ex) && attempt < MaxOutputInitRetries)
             {
-                DiagLog.Write($"CreateAndInitOutputWithRetry: tentativa {attempt} falhou (0x{ex.HResult:X8}), aguardando {OutputInitRetryDelay.TotalMilliseconds}ms antes de repetir");
                 Thread.Sleep(OutputInitRetryDelay);
             }
         }
@@ -293,17 +275,14 @@ public class AudioEngine : IAudioEngine, IDisposable
     /// </summary>
     private WasapiOut CreateAndInitOutput(MMDevice outputDevice, BufferedWaveProvider source)
     {
-        DiagLog.Write($"CreateAndInitOutput: source={DescribeFormat(source.WaveFormat)} outputMixFormat={DescribeFormat(outputDevice.AudioClient.MixFormat)}");
         var output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
         try
         {
             output.Init(source);
-            DiagLog.Write("CreateAndInitOutput: sucesso na tentativa 1 (source direto)");
             return output;
         }
         catch (Exception ex)
         {
-            DiagLog.Write($"CreateAndInitOutput: tentativa 1 (source direto) falhou — {ex.GetType().Name} 0x{ex.HResult:X8}");
             output.Dispose();
             if (ex is not COMException comEx || !IsUnsupportedFormat(comEx))
             {
@@ -319,12 +298,10 @@ public class AudioEngine : IAudioEngine, IDisposable
         {
             _resampler = new MediaFoundationResampler(source, outputMixFormat) { ResamplerQuality = 60 };
             output.Init(_resampler);
-            DiagLog.Write($"CreateAndInitOutput: sucesso na tentativa 2 (resample p/ {DescribeFormat(outputMixFormat)})");
             return output;
         }
         catch (Exception ex)
         {
-            DiagLog.Write($"CreateAndInitOutput: tentativa 2 (resample p/ {DescribeFormat(outputMixFormat)}) falhou — {ex.GetType().Name} 0x{ex.HResult:X8}");
             output.Dispose();
             _resampler?.Dispose();
             if (ex is not COMException comEx || !IsUnsupportedFormat(comEx))
@@ -339,12 +316,10 @@ public class AudioEngine : IAudioEngine, IDisposable
         try
         {
             output.Init(_resampler);
-            DiagLog.Write($"CreateAndInitOutput: sucesso na tentativa 3 (resample p/ {DescribeFormat(plainFormat)})");
             return output;
         }
-        catch (Exception ex)
+        catch
         {
-            DiagLog.Write($"CreateAndInitOutput: tentativa 3 (resample p/ {DescribeFormat(plainFormat)}) TAMBÉM falhou — {ex.GetType().Name} 0x{ex.HResult:X8}");
             // Mesma classe de vazamento corrigida em TryStartCapture (S7): sem isto, um AudioClient
             // de saída jamais liberado sobrevive à exceção e segura o dispositivo de saída.
             output.Dispose();

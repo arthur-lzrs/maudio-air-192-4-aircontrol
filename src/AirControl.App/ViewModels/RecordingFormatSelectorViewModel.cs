@@ -104,8 +104,6 @@ public partial class RecordingFormatSelectorViewModel : ViewModelBase
             : null;
 
         var current = _controller.GetCurrentFormat(deviceId);
-        AirControl.Audio.DiagLog.Write($"ResolveForDevice: current={current} resolved={resolved} " +
-            (current == resolved ? "(iguais, sem escrita)" : "(diferentes, vai escrever)"));
         if (current == resolved)
         {
             SetSelectedFormatWithoutApplying(resolved);

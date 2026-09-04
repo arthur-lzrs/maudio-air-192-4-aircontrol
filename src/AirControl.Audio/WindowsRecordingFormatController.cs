@@ -29,13 +29,20 @@ namespace AirControl.Audio;
 /// </remarks>
 public class WindowsRecordingFormatController : IRecordingFormatController
 {
-    /// <summary>Lista fixa de combinações candidatas oferecidas na UI (research.md §5) — não é uma checagem de capacidade real, ver remarks da classe.</summary>
+    /// <summary>
+    /// Lista fixa de combinações candidatas oferecidas na UI (research.md §5) — não é uma checagem
+    /// de capacidade real, ver remarks da classe (o gate real é a escrita em <see cref="TrySetFormat"/>,
+    /// que só confirma sucesso se o Windows realmente aceitar a combinação). Cobre todas as taxas
+    /// que o AIR 192|4 anuncia (o próprio nome do produto — até 192kHz) × os três bit depths comuns;
+    /// achado na validação manual de campo (V3, research.md §1 S8) que a lista anterior omitia
+    /// 44100/32-bit e qualquer taxa acima de 96000Hz (88200/176400/192000), fazendo o "Formato de
+    /// gravação (Windows)" ficar sem nenhuma opção quando o driver ASIO estava em 176400Hz, mesmo o
+    /// Windows expondo e aceitando essa taxa diretamente pelo Painel de Som.
+    /// </summary>
     private static readonly (int SampleRate, int BitDepth)[] CandidateFormats =
-    {
-        (44100, 16), (44100, 24),
-        (48000, 16), (48000, 24), (48000, 32),
-        (96000, 24), (96000, 32),
-    };
+        (from sampleRate in new[] { 44100, 48000, 88200, 96000, 176400, 192000 }
+         from bitDepth in new[] { 16, 24, 32 }
+         select (sampleRate, bitDepth)).ToArray();
 
     public RecordingFormat? GetCurrentFormat(string deviceId)
     {
@@ -65,7 +72,6 @@ public class WindowsRecordingFormatController : IRecordingFormatController
             return false;
         }
 
-        DiagLog.Write($"TrySetFormat: escrevendo {format} via IPolicyConfig::SetDeviceFormat");
         try
         {
             DeviceFormatPropertyStore.WriteDefaultFormat(deviceId, format.SampleRate, format.BitDepth);
