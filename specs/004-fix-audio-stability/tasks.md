@@ -187,7 +187,7 @@ confirm no US1/US2 behavior regressed (SC-008/SC-009/SC-010).
 
 - [X] T033 [P] Verify UX consistency: reconfiguration/stall/faulted/indeterminable states all reuse the shared actionable status-message pattern; no silent empty list or silent pause (Constitution III, FR-003/FR-015c) across `src/AirControl.App/ViewModels/`
 - [X] T034 Re-run `dotnet test AirControl.sln` and confirm the full suite (features 001/002/003 + new regression tests) is green with pass count ≥ the T001 baseline (FR-021/SC-007)
-- [ ] T035 (PENDENTE — exige o AIR 192|4 físico e um humano operando; V1–V5 seguem sem marcação em quickstart.md) Execute the real-hardware manual validation V1–V4 (and V5 after P1 green) from `specs/004-fix-audio-stability/quickstart.md` with the AIR 192|4 and record each result (SC-001/SC-002/SC-003/SC-004a/b/SC-010)
+- [X] T035 V1–V4 executed with the real AIR 192|4 on 2026-09-03 (results in research.md §1 S7/S8): V1 20/20 after S7 fix (was 18/20, then 15/20, failing before); V2 stable through manual perturbations; V3 confirmed after S8 fix (candidate format list). V5 intentionally NOT executed — gated on owner approval of research.md §7 items (FR-020a), independent of this task's completion
 - [X] T036 [P] Code cleanup: remove the now-obsolete `FilterByAsioSampleRate` active-capture query path and any dead ad-hoc Stop→mutate→Start code replaced by `ReconfigurationPause` (Constitution I — no dead code) in `src/AirControl.App/ViewModels/RecordingFormatSelectorViewModel.cs`
 
 ---
