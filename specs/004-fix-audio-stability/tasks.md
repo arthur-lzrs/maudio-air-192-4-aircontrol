@@ -163,19 +163,20 @@ before/after measurement, reverted if they don't deliver.
 **⚠️ GATE**: Implementation tasks (T031+) MUST NOT start until US1 & US2 fixes are delivered and the
 suite is green (FR-020b), and only for items the owner approved (FR-020a).
 
-> **STATUS (2026-09-03): fase inteira NÃO executada, deliberadamente.** A pré-condição FR-020b (US1
-> e US2 verdes) está satisfeita, mas FR-020a exige uma decisão de aprovação **do responsável** por
-> item — que não pode ser tomada automaticamente. `research.md` §7 permanece como scaffold, pronto
-> para ser preenchido e aprovado por um humano. Nenhuma troca de tecnologia foi aplicada ao código.
+> **STATUS (2026-09-03): concluída.** Recomendação preenchida (T029), aprovação do responsável
+> obtida item a item (T030): itens 1-3 rejeitados (modo exclusivo, sinais COM granulares, reescrita
+> da camada de captura), item 4 (latência/resample) aprovado para teste. Aplicado, medido ao vivo
+> (T031/T032) — sem ganho perceptível de latência a 30ms e sem regressão — e revertido para o valor
+> original de 50ms por não entregar melhoria (FR-020d). Ver research.md §7 para o detalhe completo.
 
 **Independent Test**: Read research.md §7 and decide adopt/not-adopt per item without further
 investigation; with approved changes applied, run the full suite + manual stability validation and
 confirm no US1/US2 behavior regressed (SC-008/SC-009/SC-010).
 
-- [ ] T029 [US5] Fill research.md §7 into a decision-ready recommendation: for each candidate (event-driven/exclusive `WasapiCapture`, richer `IMMNotificationClient`/session events, capture-layer alternatives, resampler/latency config) record concrete benefit, cost, risk, and a clear adopt/not-adopt recommendation with "how to measure the improvement" in `specs/004-fix-audio-stability/research.md` (FR-020)
-- [ ] T030 [US5] Record the owner's per-item approval decision in research.md §7 (`TechnologyRecommendation.Approval`); only approved items proceed to implementation (FR-020a) in `specs/004-fix-audio-stability/research.md`
-- [ ] T031 [US5] For each APPROVED item only: capture a before measurement, apply the change in the relevant `src/AirControl.Audio/`/`src/AirControl.Core/` file, capture the after measurement, and record both in research.md §7 (FR-020c) — gated on US1/US2 green (FR-020b)
-- [ ] T032 [US5] For each applied item, re-run the full suite + V1/V2/V3 stability validation; revert any item that fails to deliver its improvement or introduces a regression and record the reason in research.md §7 (FR-020d/SC-010)
+- [X] T029 [US5] Fill research.md §7 into a decision-ready recommendation: for each candidate (event-driven/exclusive `WasapiCapture`, richer `IMMNotificationClient`/session events, capture-layer alternatives, resampler/latency config) record concrete benefit, cost, risk, and a clear adopt/not-adopt recommendation with "how to measure the improvement" in `specs/004-fix-audio-stability/research.md` (FR-020)
+- [X] T030 [US5] Record the owner's per-item approval decision in research.md §7 (`TechnologyRecommendation.Approval`); only approved items proceed to implementation (FR-020a) in `specs/004-fix-audio-stability/research.md`
+- [X] T031 [US5] For each APPROVED item only: capture a before measurement, apply the change in the relevant `src/AirControl.Audio/`/`src/AirControl.Core/` file, capture the after measurement, and record both in research.md §7 (FR-020c) — gated on US1/US2 green (FR-020b)
+- [X] T032 [US5] For each applied item, re-run the full suite + V1/V2/V3 stability validation; revert any item that fails to deliver its improvement or introduces a regression and record the reason in research.md §7 (FR-020d/SC-010)
 
 **Checkpoint**: Only approved, measured, non-regressing technology changes remain applied.
 

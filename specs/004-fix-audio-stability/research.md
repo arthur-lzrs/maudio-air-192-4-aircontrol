@@ -291,6 +291,10 @@ feature revelou sobre o comportamento real do AIR 192|4, especialmente S7/S8):
   captado e ouvido no monitor) e monitorar `StreamHealthChanged` por 30 min contínuos em `latency:
   50` (linha de base atual) vs. um valor menor (ex.: 30ms) — só adota se a latência cair
   perceptivelmente E zero transições para `Stalled`/`Faulted` aparecerem na janela de teste.
+- **Resultado (T032, 2026-09-03)**: testado ao vivo com `latency: 30`. Nenhuma transição para
+  `Stalled`/`Faulted` no período testado (regressão zero), mas também **nenhuma melhora perceptível**
+  de latência. Sem ganho mensurável, **revertido** para `latency: 50` (FR-020d) — a constante
+  temporária foi removida, o valor voltou a ser o literal original.
 
 Cada item aprovado é aplicado e medido; um que não entregue a melhoria ou introduza regressão é
 revertido com o motivo registrado aqui (FR-020d).
@@ -302,7 +306,7 @@ revertido com o motivo registrado aqui (FR-020d).
 | 1. Modo exclusivo | **Não adotado** | Travaria o dispositivo para outros apps sem ganho pedido |
 | 2. Sinais COM granulares | **Não adotado** | Watchdog atual já cobre SC-002; mais dependência de um driver já peculiar é risco |
 | 3. Trocar camada de captura | **Não adotado** | Reescrita completa sem ganho concreto; perderia o endurecimento de S7/S8 |
-| 4. Latência/resample | **Aprovado para teste** | Baixo risco, reversível, mede exatamente o que a spec pede |
+| 4. Latência/resample | Aprovado para teste → **revertido após medição** | Testado a 30ms: sem ganho perceptível, sem regressão; devolvido a 50ms (FR-020d) |
 
 ---
 
