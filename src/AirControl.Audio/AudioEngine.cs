@@ -217,8 +217,23 @@ public class AudioEngine : IAudioEngine, IDisposable
             capture = new WasapiCapture(inputDevice) { WaveFormat = fallbackFormat };
             capture.DataAvailable += OnDataAvailable;
             capture.RecordingStopped += OnRecordingStopped;
-            capture.StartRecording();
-            return capture;
+            try
+            {
+                capture.StartRecording();
+                return capture;
+            }
+            catch
+            {
+                // Achado ao investigar S7: se a tentativa de fallback também falhar, o AudioClient
+                // desta segunda captura NUNCA era liberado (sem Dispose aqui) — ficava vivo,
+                // segurando o dispositivo, e sabotava toda tentativa seguinte (inclusive as 3
+                // repetições do retry acima). Provável causa real dos 18/20 falhando sempre, não
+                // apenas o driver "não ter liberado a sessão anterior".
+                capture.DataAvailable -= OnDataAvailable;
+                capture.RecordingStopped -= OnRecordingStopped;
+                capture.Dispose();
+                throw;
+            }
         }
     }
 
@@ -262,8 +277,19 @@ public class AudioEngine : IAudioEngine, IDisposable
         var plainFormat = WaveFormat.CreateIeeeFloatWaveFormat(outputMixFormat.SampleRate, outputMixFormat.Channels);
         output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: true, latency: 50);
         _resampler = new MediaFoundationResampler(source, plainFormat) { ResamplerQuality = 60 };
-        output.Init(_resampler);
-        return output;
+        try
+        {
+            output.Init(_resampler);
+            return output;
+        }
+        catch
+        {
+            // Mesma classe de vazamento corrigida em TryStartCapture (S7): sem isto, um AudioClient
+            // de saída jamais liberado sobrevive à exceção e segura o dispositivo de saída.
+            output.Dispose();
+            _resampler?.Dispose();
+            throw;
+        }
     }
 
     private static bool IsUnsupportedFormat(COMException ex) => unchecked((uint)ex.HResult) == 0x88890008;
